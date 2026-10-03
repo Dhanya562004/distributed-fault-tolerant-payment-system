@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  payment-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: payment-backend-api
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/payment_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres_secret
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo-db:27017/payment_audit_db
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      mongo-db:
+        condition: service_started
+    restart: on-failure
+
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: payment-postgres-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=payment_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres_secret
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mongo-db:
+    image: mongo:6-jammy
+    container_name: payment-mongo-db
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=payment_audit_db
+    volumes:
+      - mongo_data:/data/db
+
+  streamlit-dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile.dashboard
+    container_name: payment-streamlit-dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      - BACKEND_API_URL=http://payment-backend:8080
+    depends_on:
+      - payment-backend
+    restart: on-failure
+
+volumes:
+  postgres_data:
+  mongo_data:

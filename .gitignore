@@ -1,0 +1,22 @@
+# Maven
+target/
+*.class
+
+# IDE
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/
+
+# Python / Streamlit
+__pycache__/
+*.pyc
+.venv/
+env/
+venv/
+
+# Environment / Logs
+*.log
+.DS_Store
