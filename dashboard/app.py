@@ -9,10 +9,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # ---------------------------------------------------------
-# Page Setup
+# Page Configuration
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="Distributed Payment Processing System Dashboard",
+    page_title="Distributed Payment System Dashboard",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -28,7 +28,7 @@ def load_css():
 load_css()
 
 # ---------------------------------------------------------
-# Robust Session & Retry Configuration
+# Robust Session & Retry Config
 # ---------------------------------------------------------
 def create_robust_session():
     session = requests.Session()
@@ -46,7 +46,7 @@ def create_robust_session():
 http_session = create_robust_session()
 
 # ---------------------------------------------------------
-# Sidebar Configuration & Backend Connection URL
+# Sidebar Configuration & Backend Health Probe
 # ---------------------------------------------------------
 st.sidebar.image("https://img.icons8.com/color/96/000000/cloud-lighting.png", width=64)
 st.sidebar.title("System Control Room")
@@ -54,25 +54,26 @@ st.sidebar.title("System Control Room")
 default_url = os.getenv("BACKEND_API_URL", "http://localhost:8080").rstrip("/")
 backend_url = st.sidebar.text_input("Backend API Base URL", value=default_url).rstrip("/")
 
-# Health Check Helper
 def check_backend_health(url):
+    """
+    Validates backend connectivity using /actuator/health with fallback to /api/v1/metrics.
+    """
     try:
-        # Check /actuator/health first
         health_resp = http_session.get(f"{url}/actuator/health", timeout=2)
         if health_resp.status_code == 200:
-            return True, "UP", health_resp.json()
+            data = health_resp.json()
+            return True, "UP", data
         
-        # Fallback to metrics check
         metrics_resp = http_session.get(f"{url}/api/v1/metrics", timeout=2)
         if metrics_resp.status_code == 200:
             return True, "UP", {"status": "UP"}
     except Exception:
         pass
-    return False, "OFFLINE", {"status": "DOWN"}
+    return False, "STARTING_OR_OFFLINE", {"status": "DOWN"}
 
 is_healthy, health_status, health_details = check_backend_health(backend_url)
 
-# API Helper Functions (Non-blocking, Exception-safe)
+# API Exception-Safe Helpers
 def api_get(endpoint):
     if not is_healthy:
         return None
@@ -86,32 +87,32 @@ def api_get(endpoint):
 
 def api_post(endpoint, payload, headers=None):
     if not is_healthy:
-        return 503, {"error": f"Backend offline at {backend_url}"}
+        return 503, {"error": f"Backend server is currently starting or offline at {backend_url}"}
     try:
         resp = http_session.post(f"{backend_url}{endpoint}", json=payload, headers=headers or {}, timeout=6)
         return resp.status_code, resp.json() if resp.content else {}
     except Exception as e:
         return 500, {"error": f"Connection error: {str(e)}"}
 
-# Render Sidebar Health Badge
+# Render Sidebar Status Badge
 if is_healthy:
     st.sidebar.markdown("**Backend Health:** 🟢 OPERATIONAL (`/actuator/health`)")
 else:
-    st.sidebar.markdown("**Backend Health:** 🔴 UNREACHABLE")
+    st.sidebar.markdown("**Backend Health:** ⏳ WAITING FOR BACKEND...")
 
-# Header
+# Main Header
 st.markdown("""
 <div class="main-header">
     <div class="main-title">⚡ Distributed Fault-Tolerant Payment System</div>
-    <div class="subtitle">High-Scale Transaction Processing Engine | Multi-Threaded Partition Workers | Fault-Injection & Idempotency Engine</div>
+    <div class="subtitle">High-Scale Transaction Engine | Multi-Threaded Partition Workers | Fault-Injection & Idempotency Engine</div>
 </div>
 """, unsafe_allow_html=True)
 
-# Top Non-Blocking Banner if Backend is Down
+# Top Friendly Banner for Backend Startup Delay
 if not is_healthy:
-    st.warning(f"⚠️ **Backend API server is offline or unreachable at `{backend_url}`**\n\n"
-               f"Please ensure your Java Spring Boot application is running (`mvn spring-boot:run` or `docker-compose up`). "
-               f"You can update the API URL in the sidebar once active.")
+    st.info(f"⏳ **Waiting for backend server to start at `{backend_url}`** (Validating `/actuator/health`)...\n\n"
+            f"If Spring Boot is starting up, this dashboard will connect automatically. "
+            f"To launch the backend, run `mvn spring-boot:run` in your terminal.")
 
 metrics_data = api_get("/api/v1/metrics") or {}
 
@@ -122,10 +123,10 @@ if metrics_data:
     st.sidebar.markdown(f"**DLQ Count:** `{metrics_data.get('dlqCount', 0)}` msgs")
 
 st.sidebar.markdown("---")
-if st.sidebar.button("🔄 Re-check Backend Connection"):
+if st.sidebar.button("🔄 Re-check Connection Now"):
     st.rerun()
 
-# Main Navigation Tabs
+# Navigation Tabs
 tab_live, tab_simulate, tab_metrics, tab_audit, tab_faults = st.tabs([
     "📊 Live Transactions",
     "💳 Payment Simulator",
@@ -181,16 +182,16 @@ with tab_live:
         st.dataframe(df[cols], use_container_width=True, hide_index=True)
     else:
         if is_healthy:
-            st.info("No transaction data recorded yet. Use the 'Payment Simulator' tab to initiate a transaction.")
+            st.info("No transaction data recorded yet. Use the 'Payment Simulator' tab to initiate a payment.")
         else:
-            st.info("Waiting for backend server connection to load transaction activity feed.")
+            st.info("Waiting for Spring Boot backend connection...")
 
 # ---------------------------------------------------------
 # TAB 2: PAYMENT SIMULATOR
 # ---------------------------------------------------------
 with tab_simulate:
     st.subheader("Interactive Payment Processing Terminal")
-    st.write("Initiate real payments with custom Idempotency Keys, Async Worker Queues, or Refund requests.")
+    st.write("Initiate payments with custom Idempotency Keys, Async Worker Queues, or Refund requests.")
 
     sim_col1, sim_col2 = st.columns(2)
 
@@ -304,7 +305,7 @@ with tab_metrics:
             "Active Queue Depth": metrics_data.get("activeQueueDepth", 0)
         })
     else:
-        st.info("System performance analytics will display once backend server is active.")
+        st.info("System metrics will load automatically once the Spring Boot server is active.")
 
 # ---------------------------------------------------------
 # TAB 4: AUDIT & STATE TRAIL

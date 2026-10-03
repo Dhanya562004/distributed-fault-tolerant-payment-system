@@ -3,6 +3,11 @@ spring:
     name: distributed-fault-tolerant-payment-system
   profiles:
     active: dev
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.mongo.MongoRepositoriesAutoConfiguration
 
 server:
   port: 8080
@@ -10,6 +15,9 @@ server:
     context-path: /
 
 management:
+  health:
+    mongo:
+      enabled: false
   endpoints:
     web:
       exposure:
