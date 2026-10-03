@@ -1,14 +1,16 @@
 import os
 import time
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
 import pandas as pd
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 
-# Config
-BACKEND_URL = os.getenv("BACKEND_API_URL", "http://localhost:8080").rstrip("/")
-
+# ---------------------------------------------------------
+# Page Setup
+# ---------------------------------------------------------
 st.set_page_config(
     page_title="Distributed Payment Processing System Dashboard",
     page_icon="⚡",
@@ -25,22 +27,77 @@ def load_css():
 
 load_css()
 
-# API Helpers
-def api_get(endpoint):
+# ---------------------------------------------------------
+# Robust Session & Retry Configuration
+# ---------------------------------------------------------
+def create_robust_session():
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=0.3,
+        status_forcelist=[500, 502, 503, 504],
+        raise_on_status=False
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+http_session = create_robust_session()
+
+# ---------------------------------------------------------
+# Sidebar Configuration & Backend Connection URL
+# ---------------------------------------------------------
+st.sidebar.image("https://img.icons8.com/color/96/000000/cloud-lighting.png", width=64)
+st.sidebar.title("System Control Room")
+
+default_url = os.getenv("BACKEND_API_URL", "http://localhost:8080").rstrip("/")
+backend_url = st.sidebar.text_input("Backend API Base URL", value=default_url).rstrip("/")
+
+# Health Check Helper
+def check_backend_health(url):
     try:
-        resp = requests.get(f"{BACKEND_URL}{endpoint}", timeout=5)
+        # Check /actuator/health first
+        health_resp = http_session.get(f"{url}/actuator/health", timeout=2)
+        if health_resp.status_code == 200:
+            return True, "UP", health_resp.json()
+        
+        # Fallback to metrics check
+        metrics_resp = http_session.get(f"{url}/api/v1/metrics", timeout=2)
+        if metrics_resp.status_code == 200:
+            return True, "UP", {"status": "UP"}
+    except Exception:
+        pass
+    return False, "OFFLINE", {"status": "DOWN"}
+
+is_healthy, health_status, health_details = check_backend_health(backend_url)
+
+# API Helper Functions (Non-blocking, Exception-safe)
+def api_get(endpoint):
+    if not is_healthy:
+        return None
+    try:
+        resp = http_session.get(f"{backend_url}{endpoint}", timeout=4)
         if resp.status_code == 200:
             return resp.json()
-    except Exception as e:
-        st.error(f"Backend API offline or unreachable at {BACKEND_URL}: {e}")
+    except Exception:
+        pass
     return None
 
 def api_post(endpoint, payload, headers=None):
+    if not is_healthy:
+        return 503, {"error": f"Backend offline at {backend_url}"}
     try:
-        resp = requests.post(f"{BACKEND_URL}{endpoint}", json=payload, headers=headers or {}, timeout=10)
+        resp = http_session.post(f"{backend_url}{endpoint}", json=payload, headers=headers or {}, timeout=6)
         return resp.status_code, resp.json() if resp.content else {}
     except Exception as e:
-        return 500, {"error": str(e)}
+        return 500, {"error": f"Connection error: {str(e)}"}
+
+# Render Sidebar Health Badge
+if is_healthy:
+    st.sidebar.markdown("**Backend Health:** 🟢 OPERATIONAL (`/actuator/health`)")
+else:
+    st.sidebar.markdown("**Backend Health:** 🔴 UNREACHABLE")
 
 # Header
 st.markdown("""
@@ -50,28 +107,25 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Sidebar System Health & Controls
-st.sidebar.image("https://img.icons8.com/color/96/000000/cloud-lighting.png", width=64)
-st.sidebar.title("System Control Room")
+# Top Non-Blocking Banner if Backend is Down
+if not is_healthy:
+    st.warning(f"⚠️ **Backend API server is offline or unreachable at `{backend_url}`**\n\n"
+               f"Please ensure your Java Spring Boot application is running (`mvn spring-boot:run` or `docker-compose up`). "
+               f"You can update the API URL in the sidebar once active.")
 
 metrics_data = api_get("/api/v1/metrics") or {}
 
 if metrics_data:
-    st.sidebar.markdown(f"**System Status:** 🟢 OPERATIONAL")
     st.sidebar.markdown(f"**Total Volume:** `{metrics_data.get('totalTransactions', 0):,}`")
     st.sidebar.markdown(f"**Success Rate:** `{metrics_data.get('successRatePercent', 100.0)}%`")
     st.sidebar.markdown(f"**Queue Depth:** `{metrics_data.get('activeQueueDepth', 0)}` msgs")
     st.sidebar.markdown(f"**DLQ Count:** `{metrics_data.get('dlqCount', 0)}` msgs")
-else:
-    st.sidebar.warning("⚠️ Backend connection pending...")
 
 st.sidebar.markdown("---")
-refresh_interval = st.sidebar.slider("Auto-Refresh Interval (sec)", 2, 30, 5)
-
-if st.sidebar.button("🔄 Refresh Data Now"):
+if st.sidebar.button("🔄 Re-check Backend Connection"):
     st.rerun()
 
-# Main Tabs
+# Main Navigation Tabs
 tab_live, tab_simulate, tab_metrics, tab_audit, tab_faults = st.tabs([
     "📊 Live Transactions",
     "💳 Payment Simulator",
@@ -123,13 +177,13 @@ with tab_live:
         if "createdAt" in df.columns:
             df["createdAt"] = pd.to_datetime(df["createdAt"]).dt.strftime('%Y-%m-%d %H:%M:%S')
         
-        st.dataframe(
-            df[["paymentId", "userId", "amount", "currency", "status", "paymentMethod", "retryCount", "idempotencyKey", "createdAt"]],
-            use_container_width=True,
-            hide_index=True
-        )
+        cols = [c for c in ["paymentId", "userId", "amount", "currency", "status", "paymentMethod", "retryCount", "idempotencyKey", "createdAt"] if c in df.columns]
+        st.dataframe(df[cols], use_container_width=True, hide_index=True)
     else:
-        st.info("No transaction data available yet. Use the 'Payment Simulator' tab to process a test transaction.")
+        if is_healthy:
+            st.info("No transaction data recorded yet. Use the 'Payment Simulator' tab to initiate a transaction.")
+        else:
+            st.info("Waiting for backend server connection to load transaction activity feed.")
 
 # ---------------------------------------------------------
 # TAB 2: PAYMENT SIMULATOR
@@ -170,7 +224,7 @@ with tab_simulate:
                     st.success(f"Response HTTP {status_code}: Payment Request Processed!")
                     st.json(response)
                 else:
-                    st.error(f"Response HTTP {status_code}: Payment Request Failed")
+                    st.error(f"Response HTTP {status_code}: Request Failed")
                     st.json(response)
 
     with sim_col2:
@@ -249,6 +303,8 @@ with tab_metrics:
             "Dead Letter Queue Size": metrics_data.get("dlqCount", 0),
             "Active Queue Depth": metrics_data.get("activeQueueDepth", 0)
         })
+    else:
+        st.info("System performance analytics will display once backend server is active.")
 
 # ---------------------------------------------------------
 # TAB 4: AUDIT & STATE TRAIL
@@ -263,11 +319,8 @@ with tab_audit:
         if "timestamp" in log_df.columns:
             log_df["timestamp"] = pd.to_datetime(log_df["timestamp"]).dt.strftime('%Y-%m-%d %H:%M:%S.%f')
         
-        st.dataframe(
-            log_df[["paymentId", "previousStatus", "newStatus", "action", "workerId", "detail", "timestamp"]],
-            use_container_width=True,
-            hide_index=True
-        )
+        cols = [c for c in ["paymentId", "previousStatus", "newStatus", "action", "workerId", "detail", "timestamp"] if c in log_df.columns]
+        st.dataframe(log_df[cols], use_container_width=True, hide_index=True)
     else:
         st.info("No audit logs recorded yet.")
 
