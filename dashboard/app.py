@@ -93,12 +93,19 @@ def check_backend_health(url):
 
 is_healthy, health_status, health_details, active_backend_url = check_backend_health(raw_backend_url)
 
+def get_target_base_url():
+    if is_healthy and active_backend_url:
+        return active_backend_url
+    clean_url = raw_backend_url.rstrip("/")
+    if ":8501" in clean_url:
+        clean_url = clean_url.replace(":8501", ":8080")
+    return clean_url
+
 # API Exception-Safe Helpers
 def api_get(endpoint):
-    if not is_healthy:
-        return None
+    target = get_target_base_url()
     try:
-        resp = http_session.get(f"{active_backend_url}{endpoint}", timeout=4)
+        resp = http_session.get(f"{target}{endpoint}", timeout=4)
         if resp.status_code == 200:
             return resp.json()
     except Exception:
@@ -106,10 +113,9 @@ def api_get(endpoint):
     return None
 
 def api_post(endpoint, payload, headers=None):
-    if not is_healthy:
-        return 503, {"error": f"Backend server is currently starting or offline at {active_backend_url}"}
+    target = get_target_base_url()
     try:
-        resp = http_session.post(f"{active_backend_url}{endpoint}", json=payload, headers=headers or {}, timeout=6)
+        resp = http_session.post(f"{target}{endpoint}", json=payload, headers=headers or {}, timeout=6)
         if resp.content:
             try:
                 return resp.status_code, resp.json()
@@ -117,7 +123,7 @@ def api_post(endpoint, payload, headers=None):
                 return resp.status_code, {"error": f"Server returned non-JSON response (HTTP {resp.status_code}). Verify Backend Base URL points to http://localhost:8080"}
         return resp.status_code, {}
     except Exception as e:
-        return 500, {"error": f"Connection error: {str(e)}"}
+        return 503, {"error": f"Connection error to backend at {target}: {str(e)}"}
 
 # Render Sidebar Status Badge
 if is_healthy:
