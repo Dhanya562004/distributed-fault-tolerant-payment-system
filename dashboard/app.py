@@ -54,14 +54,19 @@ st.sidebar.image("https://img.icons8.com/color/96/000000/cloud-lighting.png", wi
 st.sidebar.title("System Control Room")
 
 default_url = os.getenv("BACKEND_API_URL", "http://localhost:8080").rstrip("/")
-raw_backend_url = st.sidebar.text_input("Backend API Base URL", value=default_url).rstrip("/")
+raw_backend_url = st.sidebar.text_input("Backend API Base URL", value=default_url, help="Spring Boot backend API URL (Default: http://localhost:8080)").rstrip("/")
+
+if ":8501" in raw_backend_url:
+    st.sidebar.warning("⚠️ Port 8501 is the Streamlit UI dashboard port! Spring Boot backend runs on **http://localhost:8080**.")
 
 def check_backend_health(url):
     """
     Validates backend connectivity using /actuator/health with fallback to / and /api/v1/metrics.
-    Also tests fallback host names (e.g. 127.0.0.1 if localhost has IPv6 resolution latency).
+    Strictly verifies response is JSON to prevent misidentifying HTML servers (e.g. Streamlit port 8501).
     """
     candidate_urls = [url]
+    if ":8501" in url:
+        candidate_urls.append(url.replace(":8501", ":8080"))
     if "localhost" in url:
         candidate_urls.append(url.replace("localhost", "127.0.0.1"))
     elif "127.0.0.1" in url:
@@ -75,12 +80,12 @@ def check_backend_health(url):
             try:
                 resp = http_session.get(f"{base}{ep}", timeout=2)
                 if resp.status_code == 200:
-                    data = {}
                     try:
                         data = resp.json()
+                        if isinstance(data, dict):
+                            return True, "UP", data, base
                     except Exception:
-                        data = {"status": "UP"}
-                    return True, "UP", data, base
+                        continue
             except Exception:
                 continue
 
@@ -105,7 +110,12 @@ def api_post(endpoint, payload, headers=None):
         return 503, {"error": f"Backend server is currently starting or offline at {active_backend_url}"}
     try:
         resp = http_session.post(f"{active_backend_url}{endpoint}", json=payload, headers=headers or {}, timeout=6)
-        return resp.status_code, resp.json() if resp.content else {}
+        if resp.content:
+            try:
+                return resp.status_code, resp.json()
+            except Exception:
+                return resp.status_code, {"error": f"Server returned non-JSON response (HTTP {resp.status_code}). Verify Backend Base URL points to http://localhost:8080"}
+        return resp.status_code, {}
     except Exception as e:
         return 500, {"error": f"Connection error: {str(e)}"}
 
