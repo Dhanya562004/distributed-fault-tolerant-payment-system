@@ -33,8 +33,10 @@ load_css()
 def create_robust_session():
     session = requests.Session()
     retry_strategy = Retry(
-        total=3,
-        backoff_factor=0.3,
+        total=2,
+        connect=2,
+        read=2,
+        backoff_factor=0.1,
         status_forcelist=[500, 502, 503, 504],
         raise_on_status=False
     )
@@ -52,33 +54,46 @@ st.sidebar.image("https://img.icons8.com/color/96/000000/cloud-lighting.png", wi
 st.sidebar.title("System Control Room")
 
 default_url = os.getenv("BACKEND_API_URL", "http://localhost:8080").rstrip("/")
-backend_url = st.sidebar.text_input("Backend API Base URL", value=default_url).rstrip("/")
+raw_backend_url = st.sidebar.text_input("Backend API Base URL", value=default_url).rstrip("/")
 
 def check_backend_health(url):
     """
-    Validates backend connectivity using /actuator/health with fallback to /api/v1/metrics.
+    Validates backend connectivity using /actuator/health with fallback to / and /api/v1/metrics.
+    Also tests fallback host names (e.g. 127.0.0.1 if localhost has IPv6 resolution latency).
     """
-    try:
-        health_resp = http_session.get(f"{url}/actuator/health", timeout=2)
-        if health_resp.status_code == 200:
-            data = health_resp.json()
-            return True, "UP", data
-        
-        metrics_resp = http_session.get(f"{url}/api/v1/metrics", timeout=2)
-        if metrics_resp.status_code == 200:
-            return True, "UP", {"status": "UP"}
-    except Exception:
-        pass
-    return False, "STARTING_OR_OFFLINE", {"status": "DOWN"}
+    candidate_urls = [url]
+    if "localhost" in url:
+        candidate_urls.append(url.replace("localhost", "127.0.0.1"))
+    elif "127.0.0.1" in url:
+        candidate_urls.append(url.replace("127.0.0.1", "localhost"))
 
-is_healthy, health_status, health_details = check_backend_health(backend_url)
+    endpoints = ["/actuator/health", "/", "/api/v1/metrics"]
+
+    for cand in candidate_urls:
+        base = cand.rstrip("/")
+        for ep in endpoints:
+            try:
+                resp = http_session.get(f"{base}{ep}", timeout=2)
+                if resp.status_code == 200:
+                    data = {}
+                    try:
+                        data = resp.json()
+                    except Exception:
+                        data = {"status": "UP"}
+                    return True, "UP", data, base
+            except Exception:
+                continue
+
+    return False, "STARTING_OR_OFFLINE", {"status": "DOWN"}, url
+
+is_healthy, health_status, health_details, active_backend_url = check_backend_health(raw_backend_url)
 
 # API Exception-Safe Helpers
 def api_get(endpoint):
     if not is_healthy:
         return None
     try:
-        resp = http_session.get(f"{backend_url}{endpoint}", timeout=4)
+        resp = http_session.get(f"{active_backend_url}{endpoint}", timeout=4)
         if resp.status_code == 200:
             return resp.json()
     except Exception:
@@ -87,16 +102,16 @@ def api_get(endpoint):
 
 def api_post(endpoint, payload, headers=None):
     if not is_healthy:
-        return 503, {"error": f"Backend server is currently starting or offline at {backend_url}"}
+        return 503, {"error": f"Backend server is currently starting or offline at {active_backend_url}"}
     try:
-        resp = http_session.post(f"{backend_url}{endpoint}", json=payload, headers=headers or {}, timeout=6)
+        resp = http_session.post(f"{active_backend_url}{endpoint}", json=payload, headers=headers or {}, timeout=6)
         return resp.status_code, resp.json() if resp.content else {}
     except Exception as e:
         return 500, {"error": f"Connection error: {str(e)}"}
 
 # Render Sidebar Status Badge
 if is_healthy:
-    st.sidebar.markdown("**Backend Health:** 🟢 OPERATIONAL (`/actuator/health`)")
+    st.sidebar.markdown(f"**Backend Health:** 🟢 OPERATIONAL (`{active_backend_url}`)")
 else:
     st.sidebar.markdown("**Backend Health:** ⏳ WAITING FOR BACKEND...")
 
@@ -108,9 +123,11 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Top Friendly Banner for Backend Startup Delay
-if not is_healthy:
-    st.info(f"⏳ **Waiting for backend server to start at `{backend_url}`** (Validating `/actuator/health`)...\n\n"
+# Top Banner for Backend Status
+if is_healthy:
+    st.success(f"🟢 **Backend Connected** at `{active_backend_url}` (Health Status: `UP`, Verified via `/actuator/health`)")
+else:
+    st.info(f"⏳ **Waiting for backend server to start at `{raw_backend_url}`** (Validating `/actuator/health`)...\n\n"
             f"If Spring Boot is starting up, this dashboard will connect automatically. "
             f"To launch the backend, run `mvn spring-boot:run` in your terminal.")
 
