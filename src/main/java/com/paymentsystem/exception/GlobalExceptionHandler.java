@@ -96,6 +96,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
 
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(org.springframework.http.converter.HttpMessageNotReadableException ex, HttpServletRequest request) {
+        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        logger.warn("[Trace: {}] Malformed JSON request body: {}", traceId, ex.getMessage());
+
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "MALFORMED_JSON_REQUEST",
+                "JSON parse error: Invalid JSON syntax or unparseable payload structure",
+                request.getRequestURI(),
+                traceId,
+                List.of("Please verify JSON body syntax and quotes.")
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationErrors(MethodArgumentNotValidException ex, HttpServletRequest request) {
         String traceId = UUID.randomUUID().toString().substring(0, 8);

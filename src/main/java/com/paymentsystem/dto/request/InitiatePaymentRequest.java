@@ -7,7 +7,6 @@ import java.math.BigDecimal;
 
 public class InitiatePaymentRequest {
 
-    @NotBlank(message = "Idempotency key is required")
     private String idempotencyKey;
 
     @NotBlank(message = "User ID is required")
@@ -20,8 +19,7 @@ public class InitiatePaymentRequest {
     @NotBlank(message = "Currency is required")
     private String currency = "USD";
 
-    @NotBlank(message = "Payment method is required")
-    private String paymentMethod; // CREDIT_CARD, DEBIT_CARD, UPI, BANK_TRANSFER, WALLET
+    private String paymentMethod = "CREDIT_CARD"; // CREDIT_CARD, DEBIT_CARD, UPI, BANK_TRANSFER, WALLET
 
     private String description;
 
@@ -72,11 +70,20 @@ public class InitiatePaymentRequest {
     }
 
     public String getPaymentMethod() {
-        return paymentMethod;
+        return paymentMethod != null ? paymentMethod : "CREDIT_CARD";
     }
 
     public void setPaymentMethod(String paymentMethod) {
-        this.paymentMethod = paymentMethod;
+        if (paymentMethod == null || paymentMethod.trim().isEmpty()) {
+            this.paymentMethod = "CREDIT_CARD";
+        } else {
+            String upper = paymentMethod.trim().toUpperCase();
+            if ("CARD".equals(upper)) {
+                this.paymentMethod = "CREDIT_CARD";
+            } else {
+                this.paymentMethod = upper;
+            }
+        }
     }
 
     public String getDescription() {

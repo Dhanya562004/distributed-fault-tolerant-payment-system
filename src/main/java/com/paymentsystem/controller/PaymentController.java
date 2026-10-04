@@ -31,10 +31,15 @@ public class PaymentController {
             @RequestHeader(value = "X-Idempotency-Key", required = false) String headerIdempotencyKey,
             @Valid @RequestBody InitiatePaymentRequest request) {
 
-        // Support header or body idempotency key
-        if (headerIdempotencyKey != null && !headerIdempotencyKey.trim().isEmpty()) {
-            request.setIdempotencyKey(headerIdempotencyKey.trim());
+        // Support header, body, or generated fallback idempotency key
+        String key = (headerIdempotencyKey != null && !headerIdempotencyKey.trim().isEmpty())
+                ? headerIdempotencyKey.trim()
+                : request.getIdempotencyKey();
+
+        if (key == null || key.trim().isEmpty()) {
+            key = "IDEM_" + System.currentTimeMillis();
         }
+        request.setIdempotencyKey(key);
 
         PaymentResponse response = paymentProcessingService.initiatePayment(request);
 
