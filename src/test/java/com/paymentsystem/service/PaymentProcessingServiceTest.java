@@ -106,7 +106,24 @@ class PaymentProcessingServiceTest {
         assertNotNull(response);
         assertEquals(PaymentStatus.FAILED, response.getStatus());
         assertTrue(response.getFailureReason().contains("Insufficient user account balance"));
+        assertEquals(0, response.getRetryCount(), "Business failures must fail fast and NOT be retried");
 
         verify(metricsService, times(1)).incrementFailedTransactions();
+        verify(metricsService, never()).recordRetry();
+    }
+
+    @Test
+    @DisplayName("Should return paginated payment records")
+    void testGetAllPayments_Pagination() {
+        com.paymentsystem.entity.PaymentTransaction tx1 = new com.paymentsystem.entity.PaymentTransaction("PAY_PAG_1", "IDEM_1", "USR_ALICE", new BigDecimal("50.00"), "USD", "CREDIT_CARD", "desc 1");
+        com.paymentsystem.entity.PaymentTransaction tx2 = new com.paymentsystem.entity.PaymentTransaction("PAY_PAG_2", "IDEM_2", "USR_ALICE", new BigDecimal("75.00"), "USD", "CREDIT_CARD", "desc 2");
+        com.paymentsystem.entity.PaymentTransaction tx3 = new com.paymentsystem.entity.PaymentTransaction("PAY_PAG_3", "IDEM_3", "USR_ALICE", new BigDecimal("100.00"), "USD", "CREDIT_CARD", "desc 3");
+
+        when(paymentRepository.findAll()).thenReturn(java.util.List.of(tx1, tx2, tx3));
+
+        java.util.List<PaymentResponse> pageResult = paymentProcessingService.getAllPayments(0, 2);
+
+        assertNotNull(pageResult);
+        assertEquals(2, pageResult.size());
     }
 }

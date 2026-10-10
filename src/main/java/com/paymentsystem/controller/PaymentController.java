@@ -58,14 +58,19 @@ public class PaymentController {
     }
 
     @GetMapping
-    @Operation(summary = "List All Payments", description = "Retrieves recent payment transactions")
-    public ResponseEntity<List<PaymentResponse>> getAllPayments() {
-        return ResponseEntity.ok(paymentProcessingService.getAllPayments());
+    @Operation(summary = "List All Payments", description = "Retrieves recent payment transactions with pagination support")
+    public ResponseEntity<List<PaymentResponse>> getAllPayments(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(paymentProcessingService.getAllPayments(page, size));
     }
 
     @GetMapping("/user/{userId}")
-    @Operation(summary = "List User Payments", description = "Retrieves payment transactions for specific userId")
-    public ResponseEntity<List<PaymentResponse>> getPaymentsByUser(@PathVariable String userId) {
-        return ResponseEntity.ok(paymentProcessingService.getPaymentsByUser(userId));
+    @Operation(summary = "List User Payments", description = "Retrieves payment transactions for specific userId with pagination support")
+    public ResponseEntity<List<PaymentResponse>> getPaymentsByUser(
+            @PathVariable String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(paymentProcessingService.getPaymentsByUser(userId, page, size));
     }
 }

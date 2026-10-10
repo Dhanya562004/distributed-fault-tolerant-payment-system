@@ -13,6 +13,8 @@ public interface PaymentProcessingService {
     boolean processWorkerMessage(EventMessage message, String workerId);
     PaymentResponse getPaymentStatus(String paymentId);
     List<PaymentResponse> getAllPayments();
+    List<PaymentResponse> getAllPayments(int page, int size);
     List<PaymentResponse> getPaymentsByUser(String userId);
+    List<PaymentResponse> getPaymentsByUser(String userId, int page, int size);
     PaymentResponse mapToResponse(PaymentTransaction tx);
 }

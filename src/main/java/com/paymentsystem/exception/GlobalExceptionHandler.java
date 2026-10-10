@@ -51,6 +51,36 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
 
+    @ExceptionHandler(PayloadMismatchException.class)
+    public ResponseEntity<ErrorResponse> handlePayloadMismatch(PayloadMismatchException ex, HttpServletRequest request) {
+        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        logger.warn("[Trace: {}] Idempotency key payload mismatch: {}", traceId, ex.getMessage());
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "IDEMPOTENCY_PAYLOAD_MISMATCH",
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId,
+                List.of("An operation with this idempotency key was previously processed with a different request body digest.")
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(InsufficientBalanceException.class)
+    public ResponseEntity<ErrorResponse> handleInsufficientBalance(InsufficientBalanceException ex, HttpServletRequest request) {
+        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        logger.warn("[Trace: {}] Insufficient user balance: {}", traceId, ex.getMessage());
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                "INSUFFICIENT_FUNDS",
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId,
+                List.of("The requested transaction amount exceeds the available user balance.")
+        );
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
+    }
+
     @ExceptionHandler(DuplicateRequestException.class)
     public ResponseEntity<ErrorResponse> handleDuplicateRequest(DuplicateRequestException ex, HttpServletRequest request) {
         String traceId = UUID.randomUUID().toString().substring(0, 8);

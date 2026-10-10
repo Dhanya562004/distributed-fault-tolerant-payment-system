@@ -1,7 +1,9 @@
 package com.paymentsystem.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentsystem.dto.request.ProcessRefundRequest;
 import com.paymentsystem.dto.response.RefundResponse;
+import com.paymentsystem.entity.IdempotencyKeyRecord;
 import com.paymentsystem.entity.PaymentStatus;
 import com.paymentsystem.entity.PaymentTransaction;
 import com.paymentsystem.entity.RefundTransaction;
@@ -20,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -36,34 +39,51 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
     private final UserRepository userRepository;
     private final AuditService auditService;
     private final IdempotencyService idempotencyService;
+    private final ObjectMapper objectMapper;
 
     @Autowired
     public RefundProcessingServiceImpl(RefundTransactionRepository refundRepository,
                                        PaymentTransactionRepository paymentRepository,
                                        UserRepository userRepository,
                                        AuditService auditService,
-                                       IdempotencyService idempotencyService) {
+                                       IdempotencyService idempotencyService,
+                                       ObjectMapper objectMapper) {
         this.refundRepository = refundRepository;
         this.paymentRepository = paymentRepository;
         this.userRepository = userRepository;
         this.auditService = auditService;
         this.idempotencyService = idempotencyService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
     @Transactional
     public RefundResponse processRefund(ProcessRefundRequest request) {
-        idempotencyService.tryAcquireOrGet(request.getIdempotencyKey(), request);
+        Optional<IdempotencyKeyRecord> cachedOpt = idempotencyService.tryAcquireOrGet(request.getIdempotencyKey(), request);
+        if (cachedOpt.isPresent()) {
+            IdempotencyKeyRecord record = cachedOpt.get();
+            try {
+                return objectMapper.readValue(record.getResponseBody(), RefundResponse.class);
+            } catch (Exception e) {
+                logger.error("Failed parsing cached refund response JSON for key: {}", request.getIdempotencyKey(), e);
+            }
+        }
 
         PaymentTransaction payment = paymentRepository.findByPaymentId(request.getPaymentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Payment transaction not found for ID: " + request.getPaymentId()));
 
-        if (payment.getStatus() != PaymentStatus.SUCCESS) {
+        if (payment.getStatus() != PaymentStatus.SUCCESS && payment.getStatus() != PaymentStatus.REFUNDED) {
             throw new InvalidTransactionStateException("Cannot refund transaction in state [" + payment.getStatus() + "]. Only SUCCESS transactions are eligible for refund.");
         }
 
-        if (request.getAmount().compareTo(payment.getAmount()) > 0) {
-            throw new InvalidTransactionStateException("Refund amount [" + request.getAmount() + "] exceeds original payment amount [" + payment.getAmount() + "].");
+        List<RefundTransaction> existingRefunds = refundRepository.findByPaymentId(request.getPaymentId());
+        BigDecimal totalAlreadyRefunded = existingRefunds.stream()
+                .map(RefundTransaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal newTotalRefunded = totalAlreadyRefunded.add(request.getAmount());
+        if (newTotalRefunded.compareTo(payment.getAmount()) > 0) {
+            throw new InvalidTransactionStateException("Refund amount [" + request.getAmount() + "] plus previous refunds [" + totalAlreadyRefunded + "] exceeds original payment amount [" + payment.getAmount() + "].");
         }
 
         String refundId = "REF_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();

@@ -3,6 +3,7 @@ package com.paymentsystem.service.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentsystem.entity.IdempotencyKeyRecord;
 import com.paymentsystem.exception.DuplicateRequestException;
+import com.paymentsystem.exception.PayloadMismatchException;
 import com.paymentsystem.repository.IdempotencyKeyRepository;
 import com.paymentsystem.service.IdempotencyService;
 import com.paymentsystem.service.MetricsService;
@@ -64,6 +65,11 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
         if (existingOpt.isPresent()) {
             IdempotencyKeyRecord existing = existingOpt.get();
+            if (existing.getRequestHash() != null && !existing.getRequestHash().equals(requestHash)) {
+                metricsService.recordIdempotencyHit();
+                logger.warn("Idempotency key payload mismatch for key: {}", keyValue);
+                throw new PayloadMismatchException("Request with idempotency key [" + keyValue + "] was previously executed with a different payload.");
+            }
             if (existing.getStatus() == IdempotencyKeyRecord.Status.IN_PROGRESS) {
                 metricsService.recordIdempotencyHit();
                 logger.warn("Concurrent duplicate request detected for key: {}", keyValue);

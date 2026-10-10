@@ -1,7 +1,10 @@
 package com.paymentsystem.service.impl;
 
 import com.paymentsystem.dto.request.SimulationConfigRequest;
+import com.paymentsystem.exception.GatewayTimeoutException;
+import com.paymentsystem.exception.LockAcquisitionException;
 import com.paymentsystem.exception.PaymentProcessingException;
+import com.paymentsystem.exception.ServiceUnavailableException;
 import com.paymentsystem.service.GatewaySimulationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,12 +81,12 @@ public class GatewaySimulationServiceImpl implements GatewaySimulationService {
 
         if (enableTimeouts && random.nextDouble() < timeoutProbability) {
             logger.warn("[SIMULATION] Injected Gateway Socket Timeout for payment: {}", paymentId);
-            throw new PaymentProcessingException("Gateway Socket Timeout: Read timed out contacting payment gateway endpoint");
+            throw new GatewayTimeoutException("Gateway Socket Timeout: Read timed out contacting payment gateway endpoint");
         }
 
         if (enableGatewayFailures && random.nextDouble() < failureProbability) {
             logger.warn("[SIMULATION] Injected Payment Gateway 503 Error for payment: {}", paymentId);
-            throw new PaymentProcessingException("Gateway Error: 503 Service Unavailable (Upstream Issuer Declined)");
+            throw new ServiceUnavailableException("Gateway Error: 503 Service Unavailable (Upstream Issuer Declined)");
         }
     }
 
@@ -91,7 +94,7 @@ public class GatewaySimulationServiceImpl implements GatewaySimulationService {
     public void simulateDbInteraction(String paymentId) {
         if (enablePartialDbFailures && random.nextDouble() < dbFailureProbability) {
             logger.warn("[SIMULATION] Injected Partial DB Failure for payment: {}", paymentId);
-            throw new PaymentProcessingException("Partial DB Failure: Connection lock acquisition timeout on transaction record");
+            throw new LockAcquisitionException("Partial DB Failure: Connection lock acquisition timeout on transaction record");
         }
     }
 }

@@ -7,8 +7,11 @@ import com.paymentsystem.entity.IdempotencyKeyRecord;
 import com.paymentsystem.entity.PaymentStatus;
 import com.paymentsystem.entity.PaymentTransaction;
 import com.paymentsystem.entity.User;
+import com.paymentsystem.exception.InsufficientBalanceException;
+import com.paymentsystem.exception.NonRetryableException;
 import com.paymentsystem.exception.PaymentProcessingException;
 import com.paymentsystem.exception.ResourceNotFoundException;
+import com.paymentsystem.exception.RetryableException;
 import com.paymentsystem.repository.PaymentTransactionRepository;
 import com.paymentsystem.repository.UserRepository;
 import com.paymentsystem.service.AuditService;
@@ -163,9 +166,16 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                 executeSinglePaymentAttempt(tx, request);
                 success = true;
 
+            } catch (NonRetryableException ex) {
+                lastError = ex.getMessage();
+                logger.warn("[NON-RETRYABLE FAILURE] Payment {} failed fast with business error: {}", paymentId, ex.getMessage());
+                break;
+            } catch (RetryableException ex) {
+                lastError = ex.getMessage();
+                logger.warn("[ATTEMPT {}/{}] Retryable payment failure for {}: {}", attempts, MAX_RETRY_ATTEMPTS, paymentId, ex.getMessage());
             } catch (PaymentProcessingException ex) {
                 lastError = ex.getMessage();
-                logger.warn("[ATTEMPT {}/{}] Payment processing failed for {}: {}", attempts, MAX_RETRY_ATTEMPTS, paymentId, ex.getMessage());
+                logger.warn("[ATTEMPT {}/{}] Payment processing failure for {}: {}", attempts, MAX_RETRY_ATTEMPTS, paymentId, ex.getMessage());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 lastError = "Execution interrupted";
@@ -203,7 +213,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
             auditService.recordAuditLog(
                     paymentId, request.getIdempotencyKey(), request.getUserId(),
                     "PENDING", "FAILED", "PAYMENT_REJECTED", "WORKER_DIRECT",
-                    "Payment failed after " + MAX_RETRY_ATTEMPTS + " attempt(s). Reason: " + lastError, Map.of("retryCount", attempts - 1)
+                    "Payment failed after " + attempts + " attempt(s). Reason: " + lastError, Map.of("retryCount", attempts - 1)
             );
 
             PaymentResponse response = mapToResponse(tx);
@@ -221,7 +231,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
         if (userOpt.isPresent()) {
             User user = userOpt.get();
             if (user.getBalance().compareTo(request.getAmount()) < 0) {
-                throw new PaymentProcessingException("Insufficient user account balance. Available: " + user.getBalance() + ", Requested: " + request.getAmount());
+                throw new InsufficientBalanceException("Insufficient user account balance. Available: " + user.getBalance() + ", Requested: " + request.getAmount());
             }
             user.setBalance(user.getBalance().subtract(request.getAmount()));
             userRepository.save(user);
@@ -295,16 +305,34 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
 
     @Override
     public List<PaymentResponse> getAllPayments() {
+        return getAllPayments(0, 50);
+    }
+
+    @Override
+    public List<PaymentResponse> getAllPayments(int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = (size <= 0 || size > 100) ? 20 : size;
         return paymentRepository.findAll().stream()
-                .sorted(Comparator.comparing(PaymentTransaction::getCreatedAt).reversed())
+                .sorted(Comparator.comparing(PaymentTransaction::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                .skip((long) safePage * safeSize)
+                .limit(safeSize)
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
     @Override
     public List<PaymentResponse> getPaymentsByUser(String userId) {
+        return getPaymentsByUser(userId, 0, 50);
+    }
+
+    @Override
+    public List<PaymentResponse> getPaymentsByUser(String userId, int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = (size <= 0 || size > 100) ? 20 : size;
         return paymentRepository.findByUserId(userId).stream()
-                .sorted(Comparator.comparing(PaymentTransaction::getCreatedAt).reversed())
+                .sorted(Comparator.comparing(PaymentTransaction::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                .skip((long) safePage * safeSize)
+                .limit(safeSize)
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }

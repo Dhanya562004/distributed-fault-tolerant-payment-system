@@ -59,7 +59,7 @@ class IdempotencyServiceTest {
         String key = "IDEM_KEY_1002";
         InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", new BigDecimal("150.00"), "USD", "CREDIT_CARD", "Test");
 
-        IdempotencyKeyRecord existing = new IdempotencyKeyRecord(key, "hash123");
+        IdempotencyKeyRecord existing = new IdempotencyKeyRecord(key, idempotencyService.computePayloadHash(request));
         existing.setStatus(IdempotencyKeyRecord.Status.IN_PROGRESS);
 
         when(idempotencyKeyRepository.findByKeyValue(key)).thenReturn(Optional.of(existing));
@@ -77,7 +77,7 @@ class IdempotencyServiceTest {
         String key = "IDEM_KEY_1003";
         InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", new BigDecimal("150.00"), "USD", "CREDIT_CARD", "Test");
 
-        IdempotencyKeyRecord existing = new IdempotencyKeyRecord(key, "hash123");
+        IdempotencyKeyRecord existing = new IdempotencyKeyRecord(key, idempotencyService.computePayloadHash(request));
         existing.setStatus(IdempotencyKeyRecord.Status.COMPLETED);
         existing.setResponseBody("{\"paymentId\":\"PAY_123\",\"status\":\"SUCCESS\"}");
 
@@ -87,6 +87,28 @@ class IdempotencyServiceTest {
 
         assertTrue(result.isPresent());
         assertEquals(IdempotencyKeyRecord.Status.COMPLETED, result.get().getStatus());
+        verify(metricsService, times(1)).recordIdempotencyHit();
+    }
+
+    @Test
+    @DisplayName("Should throw PayloadMismatchException when same key is used with different payload")
+    void testTryAcquire_PayloadMismatch_ThrowsException() {
+        String key = "IDEM_KEY_MISMATCH";
+        InitiatePaymentRequest originalRequest = new InitiatePaymentRequest(key, "USR_ALICE", new BigDecimal("150.00"), "USD", "CREDIT_CARD", "Test");
+        InitiatePaymentRequest conflictingRequest = new InitiatePaymentRequest(key, "USR_ALICE", new BigDecimal("999.00"), "USD", "CREDIT_CARD", "Test Conflicting Payload");
+
+        String originalHash = idempotencyService.computePayloadHash(originalRequest);
+
+        IdempotencyKeyRecord existing = new IdempotencyKeyRecord(key, originalHash);
+        existing.setStatus(IdempotencyKeyRecord.Status.COMPLETED);
+        existing.setResponseBody("{\"paymentId\":\"PAY_123\",\"status\":\"SUCCESS\"}");
+
+        when(idempotencyKeyRepository.findByKeyValue(key)).thenReturn(Optional.of(existing));
+
+        assertThrows(com.paymentsystem.exception.PayloadMismatchException.class, () -> {
+            idempotencyService.tryAcquireOrGet(key, conflictingRequest);
+        });
+
         verify(metricsService, times(1)).recordIdempotencyHit();
     }
 }
