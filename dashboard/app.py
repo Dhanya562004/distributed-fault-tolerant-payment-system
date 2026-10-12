@@ -51,6 +51,19 @@ def create_robust_session():
 
 http_session = create_robust_session()
 
+def format_timestamp_safe(val):
+    if val is None:
+        return ""
+    try:
+        s = str(val).replace("T", " ").rstrip("Z")
+        if "." in s:
+            parts = s.split(".")
+            return parts[0] + "." + parts[1][:3]
+        return s
+    except Exception:
+        return str(val)
+
+
 # ---------------------------------------------------------
 # Realistic Default Dataset (Standalone & Seeder Engine)
 # ---------------------------------------------------------
@@ -890,7 +903,7 @@ with tab_live:
     if filtered_payments:
         df = pd.DataFrame(filtered_payments)
         if "createdAt" in df.columns:
-            df["createdAt"] = pd.to_datetime(df["createdAt"]).dt.strftime('%Y-%m-%d %H:%M:%S')
+            df["createdAt"] = df["createdAt"].apply(format_timestamp_safe)
 
         display_cols = [c for c in ["paymentId", "userId", "amount", "currency", "status", "paymentMethod", "retryCount", "description", "createdAt"] if c in df.columns]
         
@@ -1172,32 +1185,35 @@ with tab_metrics:
 
     # Volume & Transaction Velocity Timeline
     if payments_list:
-        df_time = pd.DataFrame(payments_list)
-        if "createdAt" in df_time.columns:
-            df_time["timestamp"] = pd.to_datetime(df_time["createdAt"])
-            df_time = df_time.sort_values("timestamp")
-            
-            fig_hist = px.histogram(
-                df_time,
-                x="timestamp",
-                y="amount",
-                color="status",
-                title="Transaction Settlement Volume Over Time ($ USD Equivalent)",
-                color_discrete_map={
-                    "SUCCESS": "#10b981",
-                    "REFUNDED": "#8b5cf6",
-                    "FAILED": "#f43f5e",
-                    "PENDING": "#f59e0b"
-                }
-            )
-            fig_hist.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font_color="#f1f5f9",
-                xaxis=dict(showgrid=False, title="Timeline"),
-                yaxis=dict(gridcolor="rgba(255,255,255,0.06)", title="Volume ($ USD)")
-            )
-            st.plotly_chart(fig_hist, use_container_width=True)
+        try:
+            df_time = pd.DataFrame(payments_list)
+            if "createdAt" in df_time.columns:
+                df_time["timestamp"] = pd.to_datetime(df_time["createdAt"], errors="coerce")
+                df_time = df_time.dropna(subset=["timestamp"]).sort_values("timestamp")
+                if not df_time.empty:
+                    fig_hist = px.histogram(
+                        df_time,
+                        x="timestamp",
+                        y="amount",
+                        color="status",
+                        title="Transaction Settlement Volume Over Time ($ USD Equivalent)",
+                        color_discrete_map={
+                            "SUCCESS": "#10b981",
+                            "REFUNDED": "#8b5cf6",
+                            "FAILED": "#f43f5e",
+                            "PENDING": "#f59e0b"
+                        }
+                    )
+                    fig_hist.update_layout(
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        font_color="#f1f5f9",
+                        xaxis=dict(showgrid=False, title="Timeline"),
+                        yaxis=dict(gridcolor="rgba(255,255,255,0.06)", title="Volume ($ USD)")
+                    )
+                    st.plotly_chart(fig_hist, use_container_width=True)
+        except Exception:
+            pass
 
 # ---------------------------------------------------------
 # TAB 4: PARTITION WORKERS & CIRCUIT BREAKER
@@ -1289,7 +1305,7 @@ with tab_audit:
     if audit_logs:
         log_df = pd.DataFrame(audit_logs)
         if "timestamp" in log_df.columns:
-            log_df["timestamp"] = pd.to_datetime(log_df["timestamp"]).dt.strftime('%Y-%m-%d %H:%M:%S.%f')
+            log_df["timestamp"] = log_df["timestamp"].apply(format_timestamp_safe)
 
         cols = [c for c in ["paymentId", "previousStatus", "newStatus", "action", "workerId", "detail", "timestamp"] if c in log_df.columns]
         st.dataframe(
