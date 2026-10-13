@@ -144,13 +144,15 @@ When using the hosted Streamlit Community Cloud instance ([Live Demo](https://di
    - **Build Command**: `mvn clean package -DskipTests`
    - **Start Command**: `java -jar target/distributed-fault-tolerant-payment-system-1.0.0.jar`
    - **Exposed Port**: `8080`
-2. Obtain your assigned public HTTPS URL (e.g. `https://<your-deployed-backend-url>`).
-3. In your Streamlit Cloud app settings, configure the environment variable:
-   ```env
-   BACKEND_API_URL=https://<your-deployed-backend-url>
+2. The permanent default production backend URL is configured as:
+   ```text
+   https://apexpay-backend-sc5s.onrender.com
    ```
-   *(Or simply enter the URL into the **Backend API Base URL** field in the dashboard sidebar).*
-4. Select **Force Live Spring Boot API** in the sidebar. All transactions submitted from Streamlit Cloud will route to your live deployed backend.
+3. In your Streamlit Cloud app settings (or via the dashboard sidebar), the backend connects directly to:
+   ```env
+   BACKEND_API_URL=https://apexpay-backend-sc5s.onrender.com
+   ```
+4. The dashboard automatically detects and binds to the live Render backend (`🟢 LIVE SPRING BOOT ENGINE BOUND`). All payment authorization, refund execution, idempotency caching, and Prometheus/Actuator telemetry route live to the Render cluster.
 
 ---
 

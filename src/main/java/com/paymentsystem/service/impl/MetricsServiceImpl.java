@@ -71,13 +71,22 @@ public class MetricsServiceImpl implements MetricsService {
         long success = Math.max(successfulTransactions.get(), dbSuccess);
         long dbFailed = (paymentTransactionRepository != null) ? paymentTransactionRepository.countByStatus(PaymentStatus.FAILED) : 0;
         long failed = Math.max(failedTransactions.get(), dbFailed);
-        long retries = retryCount.get();
+        long dbRetries = 0;
+        if (paymentTransactionRepository != null) {
+            try {
+                dbRetries = paymentTransactionRepository.findAll().stream()
+                        .mapToLong(p -> p.getRetryCount() != null ? p.getRetryCount() : 0)
+                        .sum();
+            } catch (Exception ignored) {
+            }
+        }
+        long retries = Math.max(retryCount.get(), dbRetries);
         long idHits = idempotencyHits.get();
         long dlq = dlqCount.get();
         long count = latencyCount.get();
 
-        double avgLatency = count > 0 ? (double) latencySumMs.get() / count : 24.5;
-        double successRate = (success + failed) > 0 ? ((double) success / (success + failed)) * 100.0 : 100.0;
+        double avgLatency = count > 0 ? (double) latencySumMs.get() / count : 0.0;
+        double successRate = (success + failed) > 0 ? ((double) success / (success + failed)) * 100.0 : (total > 0 ? 100.0 : 0.0);
 
         response.setTotalTransactions(total);
         response.setSuccessfulTransactions(success);

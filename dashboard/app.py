@@ -376,12 +376,26 @@ backend_mode = st.sidebar.radio(
     help="Select whether to bind directly to the Spring Boot microservice or run in embedded standalone simulation mode."
 )
 
-default_url = os.getenv("BACKEND_API_URL", "http://localhost:8080").rstrip("/")
+DEFAULT_BACKEND_URL = os.getenv("BACKEND_API_URL", "https://apexpay-backend-sc5s.onrender.com").rstrip("/")
+# Read from query parameters or session_state to ensure it permanently stays selected across refreshes
+if "backend_url" not in st.session_state:
+    try:
+        qp_url = st.query_params.get("backend_url", DEFAULT_BACKEND_URL)
+        st.session_state["backend_url"] = qp_url.rstrip("/") if qp_url else DEFAULT_BACKEND_URL
+    except Exception:
+        st.session_state["backend_url"] = DEFAULT_BACKEND_URL
+
 raw_backend_url = st.sidebar.text_input(
     "Backend API Base URL",
-    value=default_url,
-    help="URL for your Spring Boot backend (Default: http://localhost:8080 for local, or https://... for hosted)"
+    value=st.session_state["backend_url"],
+    help="URL for your Spring Boot backend (Default: https://apexpay-backend-sc5s.onrender.com)"
 ).rstrip("/")
+
+st.session_state["backend_url"] = raw_backend_url
+try:
+    st.query_params["backend_url"] = raw_backend_url
+except Exception:
+    pass
 
 def check_backend_health(url):
     candidate_urls = [url]
@@ -398,7 +412,7 @@ def check_backend_health(url):
         base = cand.rstrip("/")
         for ep in endpoints:
             try:
-                resp = http_session.get(f"{base}{ep}", timeout=2.5)
+                resp = http_session.get(f"{base}{ep}", timeout=8.0)
                 if resp.status_code == 200:
                     try:
                         data = resp.json()
@@ -455,11 +469,18 @@ def get_standalone_metrics():
 def api_get(endpoint):
     if is_live_backend:
         try:
-            resp = http_session.get(f"{active_backend_url}{endpoint}", timeout=4)
+            resp = http_session.get(f"{active_backend_url}{endpoint}", timeout=10)
             if resp.status_code == 200:
                 return resp.json()
         except Exception:
             pass
+        # Do not return mock simulated datasets when connected to live backend
+        if endpoint == "/api/v1/metrics":
+            return None
+        elif endpoint in ["/api/v1/payments", "/api/v1/audit/logs"]:
+            return []
+        elif endpoint == "/api/v1/simulation/dlq":
+            return {"dlqCount": 0, "messages": []}
 
     # Standalone Simulation Fallback
     if endpoint == "/api/v1/metrics":
@@ -478,7 +499,7 @@ def api_get(endpoint):
 def api_post(endpoint, payload, headers=None):
     if is_live_backend:
         try:
-            resp = http_session.post(f"{active_backend_url}{endpoint}", json=payload, headers=headers or {}, timeout=7)
+            resp = http_session.post(f"{active_backend_url}{endpoint}", json=payload, headers=headers or {}, timeout=15)
             if resp.content:
                 try:
                     return resp.status_code, resp.json()
@@ -639,8 +660,64 @@ else:
     """, unsafe_allow_html=True)
 
 # Fetch latest telemetry
-metrics_data = api_get("/api/v1/metrics") or {}
-payments_list = api_get("/api/v1/payments") or []
+metrics_data = api_get("/api/v1/metrics")
+payments_list = api_get("/api/v1/payments")
+
+if is_live_backend:
+    if payments_list is None:
+        payments_list = []
+    if metrics_data is None:
+        metrics_data = {}
+else:
+    metrics_data = metrics_data or {}
+    payments_list = payments_list or []
+
+# Accurate metrics calculation from live backend & transaction ledger
+total_tx_count = metrics_data.get("totalTransactions")
+if total_tx_count is None:
+    total_tx_count = len(payments_list)
+else:
+    total_tx_count = max(total_tx_count, len(payments_list))
+
+success_tx_count = metrics_data.get("successfulTransactions")
+if success_tx_count is None:
+    success_tx_count = sum(1 for p in payments_list if p.get("status") == "SUCCESS")
+else:
+    success_tx_count = max(success_tx_count, sum(1 for p in payments_list if p.get("status") == "SUCCESS"))
+
+failed_tx_count = metrics_data.get("failedTransactions")
+if failed_tx_count is None:
+    failed_tx_count = sum(1 for p in payments_list if p.get("status") == "FAILED")
+else:
+    failed_tx_count = max(failed_tx_count, sum(1 for p in payments_list if p.get("status") == "FAILED"))
+
+# Compute success rate accurately
+if total_tx_count == 0:
+    live_success_rate = 0.0
+elif "successRatePercent" in metrics_data:
+    live_success_rate = float(metrics_data["successRatePercent"])
+elif (success_tx_count + failed_tx_count) > 0:
+    live_success_rate = round((success_tx_count / (success_tx_count + failed_tx_count)) * 100.0, 1)
+else:
+    live_success_rate = 0.0
+
+# Compute retries accurately
+db_retries = sum(p.get("retryCount", 0) for p in payments_list)
+live_retries = max(metrics_data.get("retryCount", 0), db_retries)
+
+# Compute idempotency hits accurately (0 if none occurred)
+if is_live_backend:
+    live_idempotency_hits = metrics_data.get("idempotencyHits", 0)
+else:
+    live_idempotency_hits = len(st.session_state.sim_idempotency)
+
+# Compute latency accurately
+if total_tx_count == 0:
+    live_latency = 0.0
+else:
+    live_latency = float(metrics_data.get("averageLatencyMs", 0.0))
+
+live_dlq = metrics_data.get("dlqCount", 0)
 
 # Compute Gross Volume in USD approximation
 def compute_gross_volume(payments):
@@ -662,10 +739,10 @@ def compute_gross_volume(payments):
 gross_volume = compute_gross_volume(payments_list)
 
 st.sidebar.markdown(f"**Gross Volume:** `${gross_volume:,.2f} USD`")
-st.sidebar.markdown(f"**Total Records:** `{metrics_data.get('totalTransactions', len(payments_list)):,}`")
-st.sidebar.markdown(f"**Success Rate:** `{metrics_data.get('successRatePercent', 100.0)}%`")
-st.sidebar.markdown(f"**Average Latency:** `{metrics_data.get('averageLatencyMs', 24.5):.1f} ms`")
-st.sidebar.markdown(f"**DLQ Messages:** `{metrics_data.get('dlqCount', 0)}`")
+st.sidebar.markdown(f"**Total Records:** `{total_tx_count:,}`")
+st.sidebar.markdown(f"**Success Rate:** `{live_success_rate:.1f}%`")
+st.sidebar.markdown(f"**Average Latency:** `{live_latency:.1f} ms`")
+st.sidebar.markdown(f"**DLQ Messages:** `{live_dlq}`")
 
 st.sidebar.markdown("---")
 
@@ -782,8 +859,8 @@ with kpi_c2:
             <span class="metric-label">Success Rate</span>
             <span class="metric-chip">SLA 99.5%</span>
         </div>
-        <div class="metric-value" style="color: #34d399;">{metrics_data.get('successRatePercent', 100.0):.1f}%</div>
-        <div class="metric-sub">{metrics_data.get('successfulTransactions', 0)} of {metrics_data.get('totalTransactions', len(payments_list))} succeeded</div>
+        <div class="metric-value" style="color: #34d399;">{live_success_rate:.1f}%</div>
+        <div class="metric-sub">{success_tx_count} of {total_tx_count} succeeded</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -794,7 +871,7 @@ with kpi_c3:
             <span class="metric-label">Retries Executed</span>
             <span class="metric-chip">EXP BACKOFF</span>
         </div>
-        <div class="metric-value" style="color: #fbbf24;">{metrics_data.get('retryCount', 0)}</div>
+        <div class="metric-value" style="color: #fbbf24;">{live_retries}</div>
         <div class="metric-sub">Auto-recovered glitch attempts</div>
     </div>
     """, unsafe_allow_html=True)
@@ -806,7 +883,7 @@ with kpi_c4:
             <span class="metric-label">Idempotency Hits</span>
             <span class="metric-chip">0 DBL CHARGE</span>
         </div>
-        <div class="metric-value" style="color: #c084fc;">{metrics_data.get('idempotencyHits', len(st.session_state.sim_idempotency))}</div>
+        <div class="metric-value" style="color: #c084fc;">{live_idempotency_hits}</div>
         <div class="metric-sub">Duplicate requests deduplicated</div>
     </div>
     """, unsafe_allow_html=True)
@@ -818,7 +895,7 @@ with kpi_c5:
             <span class="metric-label">Avg P99 Latency</span>
             <span class="metric-chip">TARGET &lt;50ms</span>
         </div>
-        <div class="metric-value" style="color: #38bdf8;">{metrics_data.get('averageLatencyMs', 24.5):.1f} <span style="font-size: 1rem; color: #94a3b8;">ms</span></div>
+        <div class="metric-value" style="color: #38bdf8;">{live_latency:.1f} <span style="font-size: 1rem; color: #94a3b8;">ms</span></div>
         <div class="metric-sub">Partition queue overhead: 1.2ms</div>
     </div>
     """, unsafe_allow_html=True)
@@ -976,22 +1053,27 @@ with tab_live:
         with inspector_c2:
             st.markdown("#### ⚡ Quick Actions & Audit Trail")
             if selected_tx.get("status") == "SUCCESS":
-                with st.form(f"refund_quick_{selected_tx.get('paymentId')}"):
+                target_pid = selected_tx.get("paymentId")
+                with st.form(f"refund_quick_{target_pid}"):
                     st.write(f"Issue refund for **${selected_tx.get('amount'):.2f} {selected_tx.get('currency')}**")
                     reason_input = st.text_input("Refund Reason", value="Customer initiated portal return")
                     if st.form_submit_button("💸 Process Instant Refund", use_container_width=True):
-                        ref_status, ref_data = api_post("/api/v1/refunds", {
-                            "paymentId": selected_tx.get("paymentId"),
-                            "amount": selected_tx.get("amount"),
-                            "idempotencyKey": f"REF_IDEM_{int(time.time()*1000)}",
-                            "reason": reason_input
-                        })
-                        if ref_status in [200, 201]:
-                            st.success(f"Refund Processed Successfully! HTTP {ref_status}")
-                            time.sleep(0.5)
-                            st.rerun()
+                        if not target_pid or not str(target_pid).strip():
+                            st.warning("⚠️ Payment ID is required to execute refund.")
                         else:
-                            st.error(f"Refund Failed: {ref_data}")
+                            quick_idem = f"REF_IDEM_{int(time.time()*1000)}"
+                            ref_status, ref_data = api_post("/api/v1/refunds", {
+                                "paymentId": str(target_pid).strip(),
+                                "amount": float(selected_tx.get("amount", 100.0)),
+                                "idempotencyKey": quick_idem,
+                                "reason": reason_input
+                            }, headers={"X-Idempotency-Key": quick_idem})
+                            if ref_status in [200, 201]:
+                                st.success(f"Refund Processed Successfully! HTTP {ref_status}")
+                                time.sleep(0.5)
+                                st.rerun()
+                            else:
+                                st.error(f"Refund Failed (HTTP {ref_status}): {ref_data}")
             elif selected_tx.get("status") == "REFUNDED":
                 st.info("This payment has already been refunded and settled back to the customer.")
             else:
@@ -1093,32 +1175,76 @@ with tab_simulate:
 
     with sim_col2:
         st.markdown("### 🔄 Process Refund")
+
+        # Determine refundable transactions
+        refundable_payments = [p for p in payments_list if p.get("status") == "SUCCESS"]
+        all_available_payments = payments_list if payments_list else []
+
+        refund_options = []
+        if refundable_payments:
+            refund_options = [f"{p['paymentId']} (${float(p.get('amount', 0)):.2f} {p.get('currency', 'USD')} - {p.get('userId')})" for p in refundable_payments]
+        elif all_available_payments:
+            refund_options = [f"{p['paymentId']} (${float(p.get('amount', 0)):.2f} {p.get('currency', 'USD')} - {p.get('status')})" for p in all_available_payments]
+
+        refund_options.append("✍️ Enter Custom Payment ID manually")
+
+        selected_refund_option = st.selectbox(
+            "Select Payment Transaction to Refund",
+            options=refund_options,
+            index=0,
+            help="Select an existing transaction or choose manual entry to input any Payment ID."
+        )
+
+        selected_pay_obj = None
+        if selected_refund_option != "✍️ Enter Custom Payment ID manually":
+            chosen_id = selected_refund_option.split(" ")[0]
+            selected_pay_obj = next((p for p in payments_list if p.get("paymentId") == chosen_id), None)
+            default_payment_id = chosen_id
+            default_refund_amount = float(selected_pay_obj.get("amount", 89.99)) if selected_pay_obj else 89.99
+        else:
+            default_payment_id = ""
+            default_refund_amount = 89.99
+
         with st.form("refund_form"):
-            refundPaymentId = st.text_input("Target Payment ID (e.g., PAY_...)", placeholder="Leave blank to refund most recent payment")
-            refundAmount = st.number_input("Refund Amount (USD)", min_value=1.0, value=89.99, step=10.0)
+            if selected_refund_option == "✍️ Enter Custom Payment ID manually":
+                refundPaymentId = st.text_input("Target Payment ID (e.g., PAY_...)", value="", placeholder="Enter valid Payment ID (Required)")
+            else:
+                refundPaymentId = st.text_input("Target Payment ID", value=default_payment_id, help="Selected transaction ID to refund")
+
+            refundAmount = st.number_input(
+                "Refund Amount",
+                min_value=0.01,
+                value=max(0.01, default_refund_amount),
+                step=10.0,
+                format="%.2f"
+            )
             refundIdemKey = st.text_input("Refund Idempotency Key", value=f"REF_IDEM_{int(time.time()*1000)}")
             refundReason = st.text_input("Reason for Refund", value="Customer returned item under return window")
 
             refund_submitted = st.form_submit_button("💸 Execute Refund", use_container_width=True)
 
             if refund_submitted:
-                payload = {
-                    "paymentId": refundPaymentId if refundPaymentId.strip() else None,
-                    "amount": refundAmount,
-                    "idempotencyKey": refundIdemKey,
-                    "reason": refundReason
-                }
-
-                status_code, response = api_post("/api/v1/refunds", payload, headers={"X-Idempotency-Key": refundIdemKey})
-
-                if status_code in [200, 201]:
-                    st.success(f"Refund Executed Successfully! (HTTP {status_code})")
-                    st.json(response)
-                    time.sleep(0.5)
-                    st.rerun()
+                clean_pid = refundPaymentId.strip() if refundPaymentId else ""
+                if not clean_pid:
+                    st.warning("⚠️ Payment ID is required. Please select an existing transaction or enter a valid Payment ID.")
                 else:
-                    st.error(f"Refund Execution Failed (HTTP {status_code})")
-                    st.json(response)
+                    payload = {
+                        "paymentId": clean_pid,
+                        "amount": float(refundAmount),
+                        "idempotencyKey": refundIdemKey.strip() or f"REF_IDEM_{int(time.time()*1000)}",
+                        "reason": refundReason
+                    }
+
+                    status_code, response = api_post("/api/v1/refunds", payload, headers={"X-Idempotency-Key": payload["idempotencyKey"]})
+
+                    if status_code in [200, 201]:
+                        st.success(f"Refund Executed Successfully! (HTTP {status_code})")
+                        st.json(response)
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.error(f"Refund Execution Failed (HTTP {status_code})")
+                        st.json(response)
 
 # ---------------------------------------------------------
 # TAB 3: PERFORMANCE & METRICS
@@ -1154,7 +1280,7 @@ with tab_metrics:
 
     with chart_c2:
         # Success Rate Gauge
-        sr_val = metrics_data.get("successRatePercent", 100.0)
+        sr_val = live_success_rate
         fig_gauge = go.Figure(go.Indicator(
             mode="gauge+number",
             value=sr_val,
@@ -1222,6 +1348,17 @@ with tab_workers:
     st.subheader("⚙️ Partition Worker Pool & Distributed Resilience Matrix")
     st.write("Visualizes multi-threaded hash partition concurrency (`hash(userId) % 4`), active consumer loops, and Resilience4j circuit breaker state.")
 
+    # Java compatible hash function for exact shard alignment
+    def java_string_hash(s):
+        if not s:
+            return 0
+        h = 0
+        for ch in str(s):
+            h = (31 * h + ord(ch)) & 0xFFFFFFFF
+        if h >= 0x80000000:
+            h -= 0x100000000
+        return abs(h)
+
     # 4 Partition Workers Grid
     w_cols = st.columns(4)
     partition_shards = [
@@ -1232,8 +1369,8 @@ with tab_workers:
     ]
 
     for idx, shard in enumerate(partition_shards):
-        # Count processed for this shard
-        count_for_shard = sum(1 for p in payments_list if abs(hash(p.get("userId", ""))) % 4 == shard["id"])
+        # Count processed for this shard matching Java partition algorithm
+        count_for_shard = sum(1 for p in payments_list if java_string_hash(p.get("userId", "")) % 4 == shard["id"])
         with w_cols[idx]:
             st.markdown(f"""
             <div class="worker-card">
