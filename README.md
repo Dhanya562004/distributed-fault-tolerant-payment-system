@@ -1,158 +1,242 @@
-# ⚡ Distributed Fault-Tolerant Payment & Transaction Engine
+# ⚡ ApexPay | Distributed Fault-Tolerant Payment Engine
 
-[![Build Status](https://img.shields.io/badge/Build-Passing-10b981.svg?style=for-the-badge&logo=github-actions)](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system)
-[![Java 17+](https://img.shields.io/badge/Java-17%2B-007396.svg?style=for-the-badge&logo=openjdk)](https://www.oracle.com/java/)
-[![Spring Boot 3.3](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F.svg?style=for-the-badge&logo=springboot)](https://spring.io/projects/spring-boot)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit%20Cloud-FF4B4B.svg?style=for-the-badge&logo=streamlit)](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/)
-[![Tests](https://img.shields.io/badge/Tests-20%20Passing-brightgreen.svg?style=for-the-badge)](docs/testing.md)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](LICENSE)
+<div align="center">
 
-An enterprise-grade, distributed, fault-tolerant **Payment & Transaction Engine** engineered with **Java 17 and Spring Boot 3.3**, modeled after high-throughput transaction processing systems at **Standard Chartered Bank**, Stripe, and PayPal. Designed for single-execution idempotency guarantees, fail-fast business error classification, exponential backoff retries with jitter, account-partitioned asynchronous worker queues, and polyglot persistence (PostgreSQL + MongoDB).
+[![Live Streamlit App](https://img.shields.io/badge/🚀%20Live%20Streamlit%20App-Online-FF4B4B.svg?style=for-the-badge&logo=streamlit)](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/)
+[![Live Render Backend](https://img.shields.io/badge/⚡%20Render%20Production%20API-Online-46E3B7.svg?style=for-the-badge&logo=render)](https://apexpay-backend-sc5s.onrender.com/actuator/health)
+[![Swagger UI Docs](https://img.shields.io/badge/📖%20Swagger%20OpenAPI-3.0-85EA2D.svg?style=for-the-badge&logo=swagger)](https://apexpay-backend-sc5s.onrender.com/swagger-ui.html)
+
+[![Java 17+](https://img.shields.io/badge/Java-17%2B-007396.svg?style=flat-square&logo=openjdk)](https://www.oracle.com/java/)
+[![Spring Boot 3.3.4](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F.svg?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
+[![Docker Container](https://img.shields.io/badge/Docker-Multi--Stage%20Container-2496ED.svg?style=flat-square&logo=docker)](Dockerfile)
+[![Polyglot Persistence](https://img.shields.io/badge/Storage-PostgreSQL%20%7C%20MongoDB%20%7C%20H2-336791.svg?style=flat-square&logo=postgresql)](docs/architecture.md)
+[![Automated Tests](https://img.shields.io/badge/Tests-20%20Passing%20(100%25)-10B981.svg?style=flat-square&logo=checkmarx)](docs/testing.md)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
+
+<p align="center">
+  <b>A Production-Grade, Resilient Transaction Processing Engine modeled after tier-1 banking systems at Standard Chartered Bank, Stripe, and PayPal.</b><br>
+  Built with <b>Java 17, Spring Boot 3.3, and Python Streamlit</b> featuring <b>distributed cryptographic idempotency</b>, <b>account-partitioned concurrency queues</b>, <b>exponential backoff with full jitter</b>, <b>fail-fast failure classification</b>, and <b>immutable NoSQL audit trails</b>.
+</p>
+
+[🎮 Launch Cloud Control Room](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/) • [🔌 Explore OpenAPI Specification](https://apexpay-backend-sc5s.onrender.com/swagger-ui.html) • [📑 Engineering Docs Suite](#-engineering-documentation-suite)
+
+</div>
 
 ---
 
-### 🌐 Live Interactive Cloud Control Room
-👉 **[Launch Live Visual Control Room Dashboard](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/)**  
-*Hosted on Streamlit Community Cloud with Dual-Mode Architecture (supports live Spring Boot API binding and standalone in-memory visual simulation).*
+## 🌟 Instant Cloud Live Deployment
+
+| Service | Endpoint / Link | Status & Purpose |
+| :--- | :--- | :--- |
+| 🖥️ **Streamlit Cloud Dashboard** | [distributed-fault-tolerant-payment-system.streamlit.app](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/) | **Live Interactive Control Room** with real-time KPI metrics, forensic transaction inspector, and fault injection lab. |
+| ⚡ **Render Production Microservice** | [`https://apexpay-backend-sc5s.onrender.com`](https://apexpay-backend-sc5s.onrender.com/actuator/health) | **High-Throughput Spring Boot 3.3 Cluster** with Actuator health, partitioned workers, and in-memory/Postgres persistence. |
+| 📖 **Swagger OpenAPI 3.0 Interactive Docs** | [`https://apexpay-backend-sc5s.onrender.com/swagger-ui.html`](https://apexpay-backend-sc5s.onrender.com/swagger-ui.html) | Direct interactive browser interface for executing live payment and refund REST API payloads. |
+| 📊 **Live Telemetry Actuator** | [`/api/v1/metrics`](https://apexpay-backend-sc5s.onrender.com/api/v1/metrics) | Real-time Micrometer/Prometheus telemetry stream tracking throughput, retries, latency, and idempotency hits. |
 
 ---
 
-## 🎮 Visual Control Room Features
+## 🏛️ High-Level Distributed Architecture
 
-The visual dashboard (`dashboard/app.py`) provides an interactive interface for exploring payment flows, partition worker concurrency, and system resilience.
+```mermaid
+flowchart TD
+    Client[🖥️ Streamlit Cloud UI / API Clients] -->|REST API with X-Idempotency-Key| Gateway[⚡ Spring Boot API Gateway / Tomcat 10.1]
+    
+    subgraph Core Payment Engine
+        Gateway --> IdempotencyGuard{🔐 Distributed Idempotency Guard}
+        
+        IdempotencyGuard -->|Key & Payload Match| CachedHit[⚡ Return Cached 200 OK Response]
+        IdempotencyGuard -->|Key Reused + Payload Mismatch| ConflictReject[🚫 409 Conflict: Payload Mismatch]
+        IdempotencyGuard -->|Key In-Flight| LockReject[⏳ 409 Conflict: Duplicate In-Flight]
+        IdempotencyGuard -->|New Unique Token| AcquireAtomicLock[🔒 Acquire Atomic DB Lock & Token]
+        
+        AcquireAtomicLock --> RouteDecision{Processing Mode}
+        
+        RouteDecision -->|Synchronous Payment| SyncWorker[Direct Authorization Engine]
+        RouteDecision -->|Async Partition Queue| PartitionRouter[Consistent Hashing: Math.abs userId.hashCode % 4]
+        
+        SyncWorker --> ErrorClassification{Error Classifier}
+        ErrorClassification -->|Business Error e.g. Insufficient Balance| FailFast[🚫 Fail-Fast: 0 Retries]
+        ErrorClassification -->|Transient Outage e.g. Socket Timeout / 503| ExponentialRetry[🔁 Exponential Backoff + Full Jitter]
+        
+        PartitionRouter --> W0[⚙️ Partition Worker 0]
+        PartitionRouter --> W1[⚙️ Partition Worker 1]
+        PartitionRouter --> W2[⚙️ Partition Worker 2]
+        PartitionRouter --> W3[⚙️ Partition Worker 3]
+        
+        W0 --> GatewaySimulator[Downstream Banking Rails]
+        W1 --> GatewaySimulator
+        W2 --> GatewaySimulator
+        W3 --> GatewaySimulator
+        
+        ExponentialRetry --> GatewaySimulator
+        GatewaySimulator -->|Exhausted Max Retries| DLQ[📦 Dead Letter Queue - DLQ]
+    end
 
-### 1. 📊 Financial KPI & Velocity Telemetry
-- **Gross Processed Volume (GPV)**: Calculates real-time settlement volume across multiple currencies (USD, EUR, GBP, INR) converted to USD equivalents.
-- **Service Level Agreement (SLA) Success Rate**: Real-time gauge tracking transaction authorization rate against a strict 99.5% enterprise SLA target.
-- **Zero-Double-Charge Idempotency Hits**: Tracks deduplication tokens, displaying duplicate requests intercepted and served from cache without duplicate ledger deductions.
-- **P99 & Average Latency Telemetry**: Real-time measurement of end-to-end authorization times, including partition enqueueing and gateway execution.
-- **Retries & Auto-Recoveries Counter**: Tracks automated retry cycles triggered by simulated downstream network glitches.
+    subgraph Polyglot Persistence & Audit
+        AcquireAtomicLock <---> RelationalDB[(SQL Database: payments, refunds, idempotency_keys)]
+        SyncWorker <---> RelationalDB
+        W0 <---> RelationalDB
+        
+        Gateway -.-> AuditLogService[NoSQL Document State Machine]
+        AuditLogService ---> MongoStore[(MongoDB / In-Memory Concurrent Buffer)]
+    end
 
-### 2. 🔍 Transaction Forensic Inspector & 1-Click Refunds
-- **Multi-Rail Activity Feed**: Real-time transaction log with multi-criteria filtering by payment status (`SUCCESS`, `PENDING`, `FAILED`, `REFUNDED`), payment rail (Credit Card, Debit Card, UPI, Apple Pay, Bank Transfer, Wallet), currency, and customer account ID.
-- **Deep Forensic Inspector**: Select any payment record to inspect its raw payload, cryptographic idempotency key, assigned partition worker shard, and timestamp down to the millisecond.
-- **1-Click Refund Execution**: Instant refund issuance form pre-populated with transaction context, enforcing cumulative refund ceilings directly from the visual interface.
-
-### 3. ⚙️ Partition Worker Cluster Matrix
-- **Consistent Hashing Shard Distribution**: Visualizes work distribution across 4 dedicated consumer worker threads (`worker-partition-0` through `worker-partition-3`) based on `hash(userId) % 4`.
-- **Worker Health & Concurrency Telemetry**: Real-time metrics for each shard showing assigned user affinity, active queue depth, and processed message count.
-- **Resilience4j Circuit Breaker Telemetry**: Live status card monitoring the downstream banking gateway circuit breaker (`CLOSED`, `HALF-OPEN`, `OPEN`), sliding window failure rates (50% threshold), and auto-recovery wait durations.
-- **Exponential Backoff Policy Inspector**: Visual breakdown of the retry configuration ($200\text{ms}$ base delay, $2.0\times$ multiplier, and randomized full jitter).
-
-### 4. 🛡️ Defensive Chaos & Fault Injection Lab
-- **Simulated Network Jitter & Latency**: Slider control injecting 500 ms to 5,000 ms delays into gateway calls to test client timeouts.
-- **Socket Read Timeouts**: Configurable failure probability injecting simulated network drops.
-- **503 Gateway Service Outages**: Probability slider triggering downstream banking outages to evaluate exponential backoff retry loops.
-- **Database Lock Contention**: Injects simulated row-level lock collisions to verify pessimistic/optimistic lock handling.
-- **Dead Letter Queue (DLQ) Inspector**: Inspects unrecoverable failed messages routed to the DLQ after exhausting all retry attempts.
-
-### 5. 🔄 Dual-Engine Processing Architecture
-
-The dashboard supports two operating modes via the **Target Processing Mode** radio selector:
-
+    subgraph Observability
+        Gateway --> MicrometerEngine[📈 Micrometer & Actuator Metrics]
+        MicrometerEngine --> PrometheusEndpoint[GET /api/v1/metrics]
+    end
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            Streamlit Dashboard                              │
-└───────────────────────┬─────────────────────────────┬───────────────────────┘
-                        │                             │
-       [Mode: Force Live API]          [Mode: Standalone Simulation]
-                        │                             │
-                        ▼                             ▼
-         ┌───────────────────────────┐ ┌───────────────────────────┐
-         │  Live Spring Boot Engine  │ │ In-Memory Session Engine  │
-         │  (http://localhost:8080)  │ │ (Streamlit Session State) │
-         ├───────────────────────────┤ ├───────────────────────────┤
-         │ • Real PostgreSQL/H2 DB   │ │ • Ephemeral mock data     │
-         │ • Real Worker Threads     │ │ • In-memory state machine │
-         │ • Real DB Idempotency     │ │ • Zero backend dependency │
-         │ • Real Micrometer Metrics │ │ • Safe cloud demos        │
-         └───────────────────────────┘ └───────────────────────────┘
-```
-
-> [!IMPORTANT]
-> **Understanding Standalone Simulation Mode vs Live Mode:**
-> - **Standalone Simulation Mode**: When the dashboard cannot reach a live Spring Boot backend (e.g. running on Streamlit Cloud without a public backend URL), it runs in an in-memory simulation mode. **Simulation metrics, transactions, and audit logs are generated in-memory within the browser session and are NOT real backend operations.** They do not touch a database, execute real Java worker threads, or persist after reload.
-> - **Live Spring Boot API Mode**: When bound to a running Spring Boot instance (`http://localhost:8080` or a deployed HTTPS URL), every payment, refund, fault rule, and metric query is an **actual HTTP REST call** to the Java microservice, executing real database transactions and worker pool processing.
 
 ---
 
-## 🛠️ Step-by-Step Execution Guide
+## 🎮 Interactive Visual Control Room Features
 
-### Option 1: Run Everything Locally (Full-Stack Live Execution)
+The visual dashboard ([`dashboard/app.py`](dashboard/app.py)) connects out-of-the-box to the live Render backend, providing comprehensive insight into transaction lifecycles:
 
-Run both the Spring Boot backend and the Streamlit dashboard on your local machine so the dashboard communicates directly with the live Java engine over `localhost`.
+### 1. 📊 Executive Financial & Velocity Telemetry
+- **Gross Processed Volume (GPV)**: Calculates real-time settlement volume across global currencies (USD, EUR, GBP, INR) converted to USD equivalents.
+- **SLA Success Rate Gauge**: Tracks gateway authorization rate against a strict enterprise 99.5% SLA target.
+- **Zero-Double-Charge Idempotency Hits**: Real-time counter of duplicate requests intercepted and served from cache without duplicate deductions.
+- **P99 & Average Latency Tracker**: Live measurement of end-to-end authorization times, including partition queue overhead.
+- **Auto-Recovered Glitch Retries**: Live counter showing automatic retry loops recovered via exponential backoff.
+
+### 2. 🔍 Forensic Transaction Inspector & Smart 1-Click Refunds
+- **Multi-Rail Activity Ledger**: Live filterable ledger supporting Credit Cards, Debit Cards, UPI, Apple Pay, Bank Transfers, and Digital Wallets.
+- **Deep Forensic Inspector**: Click any transaction to inspect its idempotency tokens, partition shard affinity, order metadata, and exact failure reason.
+- **Smart Refund Dropdown with Client Validation Guard**:
+  - Dynamically populates eligible `SUCCESS` payment records with their exact amount and account.
+  - Automatically pre-fills `Target Payment ID` and `Refund Amount`.
+  - Client-side validation ensures no blank or invalid payment IDs reach the backend, preventing HTTP 400 validation failures.
+  - Enforces cumulative refund ceilings ($\sum \text{Refunds} \le \text{Payment Amount}$).
+
+### 3. ⚙️ Partition Worker Concurrency Matrix
+- **Consistent Hash Partitioning**: Visualizes multi-threaded worker pools (`worker-partition-0` to `worker-partition-3`) using Java's exact `Math.abs(userId.hashCode()) % 4` algorithm.
+- **Per-Account FIFO Ordering**: Prevents out-of-order execution on single customer accounts while maximizing parallel throughput across distinct users.
+- **Resilience4j Circuit Breaker Telemetry**: Live status card monitoring the downstream banking gateway circuit breaker (`CLOSED`, `HALF-OPEN`, `OPEN`), 50% failure rate thresholds, and auto-recovery durations.
+
+### 4. 🛡️ Chaos Engineering & Fault Injection Lab
+- **Network Latency Jitter**: Sliders to inject between 500 ms and 5,000 ms delays into banking calls to test client timeouts.
+- **Socket Read Timeouts**: Configurable failure probability simulating socket read interruptions.
+- **503 Gateway Service Outages**: Tests exponential backoff recovery loops under severe downstream service degradation.
+- **Dead Letter Queue (DLQ) Inspector**: Live inspection of unrecoverable messages routed to the DLQ after exhausting 3 backoff retries.
+
+---
+
+## ⚙️ Core Engineering Capabilities
+
+### 1. 🛡️ Cryptographic Idempotency & Conflict Guard
+- **Atomic SQL Token Locks**: Evaluates `X-Idempotency-Key` using database-level `UNIQUE` constraints in PostgreSQL / H2.
+- **SHA-256 Digest Verification**: Prevents key hijacking. If an idempotency key is reused with a different request payload, the engine rejects it immediately with `PayloadMismatchException` (HTTP 409 Conflict).
+- **In-Flight Lock Protection**: Rejects concurrent requests for the same key with `DuplicateRequestException` (HTTP 409 Conflict).
+
+### 2. 🔁 Intelligent Failure Taxonomy & Exponential Backoff
+- **Fail-Fast Business Errors**: Non-retryable errors (`InsufficientBalanceException`, `PayloadMismatchException`, `InvalidTransactionStateException`) fail fast on Attempt 1 with zero retries.
+- **Resilient Retry Loop**: Transient failures (`GatewayTimeoutException`, `ServiceUnavailableException`, `LockAcquisitionException`) are retried up to 3 times with exponential backoff and randomized jitter:
+  $$\text{Backoff} = \min\left(\text{Initial} \times 2^{\text{attempt}} + \text{rand}(0, 200\text{ms}), 8000\text{ms}\right)$$
+
+### 3. 🔀 Account-Partitioned Concurrency Queues
+- Uses consistent hashing on `userId` to route asynchronous payment requests to dedicated partition queues.
+- Guarantees **strict per-user FIFO execution order** without race conditions, while allowing parallel multi-threaded throughput across independent user accounts.
+
+### 4. 💸 Cumulative Refund Ceiling Validation
+- Enforces multi-step refund limits:
+  $$\sum \text{Existing Refunds} + \text{New Refund Amount} \le \text{Original Payment Amount}$$
+- Prevents over-refunding and transitions payment status to `REFUNDED` upon full repayment.
+
+### 5. 📜 Polyglot Persistence Strategy
+- **PostgreSQL / H2**: Relational ACID transactional storage with `@Version` optimistic locking, row constraints, foreign keys, and indexes.
+- **MongoDB**: High-throughput, append-only document audit log (`AuditLogDocument`) with thread-safe in-memory circular buffer fallback.
+
+---
+
+## 🔌 REST API Specification
+
+| HTTP Method | Endpoint | Parameters / Headers | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/payments` | `X-Idempotency-Key` (Optional Header) | Initiate synchronous or partitioned asynchronous payment transaction |
+| `GET` | `/api/v1/payments/{paymentId}` | `paymentId` (Path) | Query payment status, metadata, and retry count |
+| `GET` | `/api/v1/payments` | `page`, `size` (Query) | List payment records with pagination |
+| `GET` | `/api/v1/payments/user/{userId}` | `userId` (Path), `page`, `size` | List all payment transactions for a specific user |
+| `POST` | `/api/v1/refunds` | `X-Idempotency-Key` (Optional Header) | Process refund with cumulative balance ceiling checks |
+| `GET` | `/api/v1/refunds/{refundId}` | `refundId` (Path) | Query refund record details |
+| `GET` | `/api/v1/refunds/payment/{paymentId}` | `paymentId` (Path) | Query all refunds associated with a payment |
+| `POST` | `/api/v1/users` | JSON Payload | Register a new user account with starting balance |
+| `GET` | `/api/v1/users/{userId}` | `userId` (Path) | Retrieve user balance and account details |
+| `GET` | `/api/v1/audit/logs` | None | Query immutable document state transition audit trail |
+| `GET` | `/api/v1/metrics` | None | Real-time Prometheus/Micrometer throughput, retries & latency |
+| `POST` | `/api/v1/simulation/config` | JSON Payload | Configure fault injection lab rules (latency, 503, timeouts) |
+| `POST` | `/api/v1/simulation/reset` | None | Reset fault simulation lab to clean defaults |
+| `GET` | `/api/v1/simulation/dlq` | None | Inspect unrecoverable messages routed to Dead Letter Queue |
+
+---
+
+## 🚀 Quickstart Guide
+
+### Option A: Use the Hosted Cloud System (Zero Setup)
+1. Open the [Live Streamlit Control Room](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/).
+2. The dashboard automatically connects to the production Render backend (`https://apexpay-backend-sc5s.onrender.com`).
+3. Click **"🚀 Traffic Burst"** to inject transactions, test idempotency tokens, and execute instant refunds!
+
+---
+
+### Option B: Run Locally on Your Workstation
 
 #### Prerequisites
 - **JDK 17+** (`java -version`)
 - **Apache Maven 3.9+** (`mvn -version`)
 - **Python 3.10+** (`python --version`)
 
-#### Steps
-1. **Start the Spring Boot backend:**
-   ```bash
-   # From repository root
-   mvn spring-boot:run
-   ```
-2. **Confirm backend is running on port 8080:**
-   Open your browser or run curl to verify health:
-   ```bash
-   curl http://localhost:8080/actuator/health
-   # Expected response: {"status":"UP","components":{"db":{"status":"UP"...}}}
-   ```
-   Open Swagger UI: `http://localhost:8080/swagger-ui.html`
+#### 1. Start the Spring Boot Backend
+```bash
+# Clone the repository
+git clone https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system.git
+cd distributed-fault-tolerant-payment-system
 
-3. **Install dashboard dependencies & run Streamlit:**
-   ```bash
-   # In a separate terminal
-   cd dashboard
-   pip install -r requirements.txt
-   streamlit run app.py
-   ```
-4. **Select Force Live Spring Boot API in Dashboard:**
-   - Open `http://localhost:8501` in your browser.
-   - In the left sidebar under **Target Processing Mode**, select **Force Live Spring Boot API** (or leave on **Auto-Detect**).
-   - Ensure **Backend API Base URL** is set to `http://localhost:8080`.
-5. **Verify live backend connection:**
-   - The top banner will display: `🟢 LIVE SPRING BOOT ENGINE BOUND`.
-   - The sidebar badge will show: `SPRING BOOT CONNECTED` (`Node: http://localhost:8080`).
-   - Click **"🚀 Traffic Burst"** or submit payments through the **Payment Simulator** tab; observe transactions persisting to the backend and updating `/api/v1/metrics`.
+# Run Spring Boot (In-Memory PostgreSQL-Compatible H2 mode)
+mvn spring-boot:run
+```
+*Backend starts on `http://localhost:8080`. Verify health at `http://localhost:8080/actuator/health`.*
+
+#### 2. Start the Streamlit Dashboard
+```bash
+# In a separate terminal
+cd dashboard
+pip install -r requirements.txt
+streamlit run app.py
+```
+*Open `http://localhost:8501`. Enter `http://localhost:8080` in the sidebar to bind to your local engine.*
 
 ---
 
-### Option 2: Connect Deployed Streamlit Dashboard to a Live Backend
+### Option C: Run Multi-Container Architecture via Docker Compose
+```bash
+docker-compose up --build
+```
+This provisions:
+- `payment-backend-api` on port `8080`
+- `payment-postgres-db` on port `5432`
+- `payment-mongo-db` on port `27017`
+- `payment-streamlit-dashboard` on port `8501`
 
-When using the hosted Streamlit Community Cloud instance ([Live Demo](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/)), the cloud container cannot access `http://localhost:8080` on your local laptop because `localhost` resolves inside the cloud container. To connect the cloud dashboard to a live backend, provide a public HTTPS URL.
+---
 
-#### Method A: Expose Local Spring Boot via Free HTTPS Tunnel (Instant Testing)
-1. Ensure your Spring Boot backend is running locally on port 8080 (`mvn spring-boot:run`).
-2. Expose port 8080 to a public HTTPS endpoint using a tunnel tool:
-   ```bash
-   # Using localtunnel:
-   npx localtunnel --port 8080
-   # OR using ngrok:
-   ngrok http 8080
-   # OR using Cloudflare Tunnel:
-   cloudflared tunnel --url http://localhost:8080
-   ```
-3. Copy the generated public HTTPS URL (e.g. `https://your-tunnel-subdomain.loca.lt` or `https://xyz.ngrok-free.app`).
-4. Open the [Streamlit Cloud Dashboard](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/).
-5. Paste your public HTTPS URL into the **Backend API Base URL** field in the left sidebar.
-6. Select **Force Live Spring Boot API**. The status will turn green (`🟢 LIVE SPRING BOOT ENGINE BOUND`), and your cloud dashboard will interact directly with your local Spring Boot backend.
+## 🧪 Automated Testing & Verification Evidence
 
-#### Method B: Deploy Spring Boot Backend to a Cloud Provider
-1. Deploy the Spring Boot application using the included [Dockerfile](Dockerfile) to any cloud host (e.g. Render, Railway, AWS ECS, Fly.io, or Heroku):
-   - **Build Command**: `mvn clean package -DskipTests`
-   - **Start Command**: `java -jar target/distributed-fault-tolerant-payment-system-1.0.0.jar`
-   - **Exposed Port**: `8080`
-2. The permanent default production backend URL is configured as:
-   ```text
-   https://apexpay-backend-sc5s.onrender.com
-   ```
-3. In your Streamlit Cloud app settings (or via the dashboard sidebar), the backend connects directly to:
-   ```env
-   BACKEND_API_URL=https://apexpay-backend-sc5s.onrender.com
-   ```
-4. The dashboard automatically detects and binds to the live Render backend (`🟢 LIVE SPRING BOOT ENGINE BOUND`). All payment authorization, refund execution, idempotency caching, and Prometheus/Actuator telemetry route live to the Render cluster.
+The test suite validates correctness under heavy contention and failure scenarios:
+
+- **20 Automated Tests**: **20 Passed, 0 Failures, 0 Errors** (100% Pass Rate).
+- **Concurrency Stress Test (`ConcurrentPaymentTest`)**: 10 parallel threads contending for the same idempotency key simultaneously:
+  - **Result**: Exactly 1 thread successfully acquired the atomic lock and processed the transaction.
+  - **Result**: 9 threads encountered managed lock conflicts and were gracefully rejected without side effects.
+  - **Result**: User balance deducted **exactly once** ($1,000 -> $900). Zero double-spending.
+- **Fail-Fast Verification (`PaymentProcessingServiceTest`)**: Insufficient account balance fails on Attempt 1 with 0 retries.
+- **Payload Conflict Verification (`IdempotencyServiceTest`)**: Same key with different payload triggers HTTP 409 Conflict.
+- **Cumulative Refund Limits (`RefundProcessingServiceTest`)**: Multiple refunds totaling more than transaction amount rejected with HTTP 422.
+- **End-to-End Lifecycle (`PaymentLifecycleIntegrationTest`)**: Full lifecycle verified in Spring Boot test container.
+
+```bash
+mvn clean test
+```
 
 ---
 
@@ -172,140 +256,7 @@ When using the hosted Streamlit Community Cloud instance ([Live Demo](https://di
 
 ---
 
-## 🏛️ System Architecture
+## 🤝 License & Attribution
 
-```mermaid
-flowchart TD
-    Client[Client / Streamlit Dashboard / Microservices] -->|REST API with X-Idempotency-Key| LoadBalancer[API Gateway / Load Balancer]
-    
-    subgraph Spring Boot Application Node
-        LoadBalancer --> Controllers[Payment & Refund REST Controllers]
-        Controllers --> IdempotencyGuard{Idempotency Engine}
-        
-        IdempotencyGuard -->|Duplicate Key & Payload Match| ReturnCached[Return Cached Response HTTP 200]
-        IdempotencyGuard -->|Duplicate Key & Payload Mismatch| ReturnConflict[Reject HTTP 409 Conflict]
-        IdempotencyGuard -->|Duplicate Key & In-Progress| ReturnInProgress[Reject HTTP 409 In-Progress]
-        IdempotencyGuard -->|New Key| LockKey[Acquire Atomic Lock in SQL DB]
-        
-        LockKey --> RouteDecision{Processing Mode}
-        
-        RouteDecision -->|Synchronous Direct| SyncEngine[Sync Payment Processing Engine]
-        RouteDecision -->|Asynchronous Queue| PartitionRing[Consistent Hashing Queue Router]
-        
-        SyncEngine --> ErrorClassifier{Failure Type?}
-        ErrorClassifier -->|Business Error e.g. Insufficient Balance| FailFast[Fail Fast: 0 Retries]
-        ErrorClassifier -->|Transient Outage e.g. Timeout / 503| RetryLoop[Exponential Backoff + Full Jitter]
-        RetryLoop --> GatewaySimulator[Payment Gateway Authorization]
-        
-        PartitionRing -->|hash userId % N| Worker0[Partition Worker 0]
-        PartitionRing -->|hash userId % N| Worker1[Partition Worker 1]
-        PartitionRing -->|hash userId % N| Worker2[Partition Worker 2]
-        PartitionRing -->|hash userId % N| Worker3[Partition Worker 3]
-        
-        Worker0 --> GatewaySimulator
-        Worker1 --> GatewaySimulator
-        Worker2 --> GatewaySimulator
-        Worker3 --> GatewaySimulator
-        
-        GatewaySimulator -->|Exhausted Retries| DLQ[Dead Letter Queue - DLQ]
-    end
-
-    subgraph Data & Persistence Tier
-        LockKey <---> PostgreSQL[(PostgreSQL: users, payments, refunds, idempotency_keys)]
-        SyncEngine <---> PostgreSQL
-        Worker0 <---> PostgreSQL
-        
-        Controllers -.-> AuditService[NoSQL Document Audit Service]
-        AuditService ---> MongoDB[(MongoDB: transaction_audit_logs)]
-        AuditService -.-> FallbackQueue[In-Memory Circular Buffer Fallback]
-    end
-
-    subgraph Real-Time Observability
-        Controllers --> MetricsTracker[Micrometer / Prometheus Metrics Engine]
-        MetricsTracker --> MetricsEndpoint[GET /api/v1/metrics & /actuator/prometheus]
-    end
-```
-
----
-
-## ⚙️ Core Engineering Capabilities
-
-### 1. 🛡️ Absolute Idempotency & Payload Conflict Detection
-- **Atomic Locks**: Evaluates `X-Idempotency-Key` using database-level `UNIQUE` constraints in PostgreSQL / H2.
-- **SHA-256 Digest Verification**: Prevents key hijacking. If an idempotency key is reused with a different request payload, the engine rejects it immediately with `PayloadMismatchException` (HTTP 409 Conflict).
-- **Concurrent In-Flight Protection**: Rejects concurrent requests using the same key with `DuplicateRequestException` (HTTP 409 Conflict).
-
-### 2. 🔁 Intelligent Failure Taxonomy & Exponential Backoff
-- **Fail-Fast Business Errors**: Non-retryable errors (`InsufficientBalanceException`, `PayloadMismatchException`, `InvalidTransactionStateException`) fail fast on Attempt 1 without wasting retries (`retryCount = 0`).
-- **Resilient Retry Loop**: Transient failures (`GatewayTimeoutException`, `ServiceUnavailableException`, `LockAcquisitionException`) are retried up to 3 times with exponential backoff and randomized jitter:
-  $$\text{Backoff} = \min\left(\text{Initial} \times 2^{\text{attempt}} + \text{rand}(0, 200\text{ms}), 8000\text{ms}\right)$$
-
-### 3. 🔀 Account-Partitioned Asynchronous Worker Pools
-- Uses consistent hashing on `userId` to route asynchronous payment requests to dedicated partition queues.
-- Guarantees **strict per-user FIFO execution order** while allowing parallel multi-threaded throughput across distinct customer accounts.
-
-### 4. 💸 Cumulative Refund Ceiling Validation
-- Enforces multi-step refund limits:
-  $$\sum \text{Existing Refunds} + \text{New Refund Amount} \le \text{Original Payment Amount}$$
-- Prevents over-refunding and transitions payment status to `REFUNDED` upon full repayment.
-
-### 5. 📜 Polyglot Persistence Strategy
-- **PostgreSQL / H2**: Relational ACID transactional storage with `@Version` optimistic locking, row constraints, foreign keys, and indexes.
-- **MongoDB**: High-throughput, append-only document audit log (`AuditLogDocument`) with in-memory non-blocking circular fallback queue when MongoDB is disabled.
-
----
-
-## 🔌 REST API Specification
-
-| HTTP Method | Endpoint | Parameters / Headers | Description |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/api/v1/payments` | `X-Idempotency-Key` | Initiate synchronous or asynchronous payment transaction |
-| `GET` | `/api/v1/payments/{paymentId}` | `paymentId` (Path) | Query payment status and details |
-| `GET` | `/api/v1/payments` | `page`, `size` (Query) | List payment records with pagination |
-| `GET` | `/api/v1/payments/user/{userId}` | `userId` (Path), `page`, `size` | List user payment records with pagination |
-| `POST` | `/api/v1/refunds` | `X-Idempotency-Key` | Process refund and restore user account balance |
-| `GET` | `/api/v1/refunds/{refundId}` | `refundId` (Path) | Query refund record details |
-| `GET` | `/api/v1/refunds/payment/{paymentId}` | `paymentId` (Path) | Query all refunds for a specific payment |
-| `POST` | `/api/v1/users` | JSON Payload | Register a new user account with starting balance |
-| `GET` | `/api/v1/users/{userId}` | `userId` (Path) | Retrieve user balance and account details |
-| `GET` | `/api/v1/audit/logs` | None | Query immutable document state transition audit trail |
-| `GET` | `/api/v1/metrics` | None | Real-time Prometheus/Micrometer throughput, retries & latency |
-| `POST` | `/api/v1/simulation/config` | JSON Payload | Inject simulated latency, socket timeouts, 503 gateway errors |
-| `POST` | `/api/v1/simulation/reset` | None | Reset fault simulation lab to clean defaults |
-| `GET` | `/api/v1/simulation/dlq` | None | Inspect unrecoverable messages in Dead Letter Queue |
-
----
-
-## 🧪 Automated Testing & Concurrency Evidence
-
-The test suite validates correctness under heavy contention and edge cases:
-
-- **20 Automated Tests Executed**: 20 Passed, 0 Failures, 0 Errors.
-- **Multi-Threaded Stress Test (`ConcurrentPaymentTest`)**: 10 parallel threads contending for the same idempotency key simultaneously:
-  - **Result**: Exactly 1 thread successfully acquired the atomic lock and processed the transaction.
-  - **Result**: 9 threads encountered managed lock conflicts and were gracefully rejected without side effects.
-  - **Result**: User balance deducted **exactly once** ($1,000 -> $900). Zero double-spending.
-- **Fail-Fast Verification (`PaymentProcessingServiceTest`)**: Insufficient account balance fails on Attempt 1 with 0 retries.
-- **Payload Conflict Verification (`IdempotencyServiceTest`)**: Same key with different payload triggers HTTP 409 Conflict.
-- **Cumulative Refund Limits (`RefundProcessingServiceTest`)**: Multiple refunds totaling more than transaction amount rejected with HTTP 422.
-- **End-to-End Lifecycle (`PaymentLifecycleIntegrationTest`)**: Full lifecycle verified in Spring Boot test container.
-
-```bash
-mvn clean test
-```
-
----
-
-## ⚠️ Known Limitations & Operational Boundaries
-
-1. **Network Boundary for Streamlit Community Cloud**:
-   - Streamlit Community Cloud instances run on remote cloud infrastructure and cannot resolve `http://localhost:8080` on your workstation. Connecting the cloud dashboard to a live backend requires a public HTTPS URL (via tunnel or cloud hosting, as detailed in Option 2).
-2. **Ephemeral Standalone Mode**:
-   - When running in Standalone Simulation Mode, all state is held in Python `st.session_state`. Refreshing the browser or starting a new session resets simulation data back to initial seeds.
-3. **In-Memory Audit Fallback in Dev Profile**:
-   - In the `dev` Spring Boot profile, MongoDB auto-configuration is excluded by default for ease of local evaluation. Audit logs are persisted to an in-memory thread-safe circular buffer (`ConcurrentLinkedQueue`) instead of a physical MongoDB instance. Enabling physical MongoDB persistence is activated in `application-prod.yml`.
-
----
-
-## 🤝 License
-Distributed under the **Apache 2.0 License**. Reference implementation for distributed transaction processing.
+Distributed under the **Apache 2.0 License**. See [LICENSE](LICENSE) for details.  
+Engineered as an enterprise reference implementation for resilient, distributed fintech systems.
