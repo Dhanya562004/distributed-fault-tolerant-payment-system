@@ -225,18 +225,35 @@ This provisions:
 The test suite validates correctness under heavy contention and failure scenarios:
 
 - **20 Automated Tests**: **20 Passed, 0 Failures, 0 Errors** (100% Pass Rate).
-- **Concurrency Stress Test (`ConcurrentPaymentTest`)**: 10 parallel threads contending for the same idempotency key simultaneously:
-  - **Result**: Exactly 1 thread successfully acquired the atomic lock and processed the transaction.
-  - **Result**: 9 threads encountered managed lock conflicts and were gracefully rejected without side effects.
-  - **Result**: User balance deducted **exactly once** ($1,000 -> $900). Zero double-spending.
+- **1,000-Request Concurrency Stress Benchmark (`ConcurrentPaymentTest`)**:
+  - **Objective**: Flood the payment engine with 1,000 concurrent duplicate payment requests sharing the exact same idempotency key and payload to verify zero double-spending, atomic locks, and idempotency guarantees under extreme contention.
+  - **Concurrency Model**: Bounded `ExecutorService` configured with 50 worker threads coordinated via a `CountDownLatch` dual-barrier (`readyLatch` and `startLatch`) to ensure simultaneous worker contention.
+  - **Verification Commands**:
+    ```bash
+    # Run the 1,000-request concurrency benchmark independently
+    mvn test -Dtest=ConcurrentPaymentTest
+
+    # Run the complete test suite
+    mvn clean test
+    ```
+  - **Repeatable Benchmark Results (3 Isolated Runs)**:
+    | Run | Requests | Workers | Throughput | Total Time | Avg Latency | p50 (Median) | p95 Latency | p99 Latency | Original Charges | Cached / 409 Conflicts | Failures |
+    | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+    | **#1** | 1,000 | 50 | **554.7 req/s** | 1,802.7 ms | 87.744 ms | 6.789 ms | 629.064 ms | 1,708.116 ms | **1** | 999 | **0** |
+    | **#2** | 1,000 | 50 | **902.9 req/s** | 1,107.6 ms | 48.808 ms | 4.274 ms | 344.781 ms | 377.274 ms | **1** | 999 | **0** |
+    | **#3** | 1,000 | 50 | **1,527.6 req/s** | 654.6 ms | 28.120 ms | 2.062 ms | 166.966 ms | 404.663 ms | **1** | 999 | **0** |
+  - **Database Correctness Assertions**:
+    - **Persisted Payment Records**: Exactly **1** payment record persisted with status `SUCCESS`.
+    - **Balance Deductions**: User balance deducted **exactly once** ($1,000.00 $\rightarrow$ $900.00). **Zero double-spending**.
+    - **Idempotency Consistency**: Exactly **1** idempotency record in state `COMPLETED` storing HTTP 200 and cached response payload.
+    - **Unexpected Failures**: Exactly **0** unexpected errors across all 3,000 requests.
+  - **Known Limitations & Scope**:
+    - **Service-Level Benchmark**: Invokes `PaymentProcessingService.initiatePayment()` directly in-process; does not measure HTTP/Tomcat serialization or network overhead.
+    - **Database Environment**: Executed against in-memory H2 (in PostgreSQL compatibility mode). H2 in-memory transaction lock latencies and throughput do not reflect distributed multi-node PostgreSQL over a physical network.
 - **Fail-Fast Verification (`PaymentProcessingServiceTest`)**: Insufficient account balance fails on Attempt 1 with 0 retries.
-- **Payload Conflict Verification (`IdempotencyServiceTest`)**: Same key with different payload triggers HTTP 409 Conflict.
+- **Payload Conflict Verification (`IdempotencyServiceTest`)**: Same key with different payload triggers HTTP 409 Conflict (`PayloadMismatchException`).
 - **Cumulative Refund Limits (`RefundProcessingServiceTest`)**: Multiple refunds totaling more than transaction amount rejected with HTTP 422.
 - **End-to-End Lifecycle (`PaymentLifecycleIntegrationTest`)**: Full lifecycle verified in Spring Boot test container.
-
-```bash
-mvn clean test
-```
 
 ---
 
