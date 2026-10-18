@@ -16,7 +16,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * - Container resource cleanup on JVM termination is automatically handled by Testcontainers Ryuk.
  */
 @SpringBootTest
-@ActiveProfiles({"dev", "postgres-test"})
+@ActiveProfiles("postgres-test")
 public abstract class AbstractPostgreSqlIntegrationTest {
 
     public static final PostgreSQLContainer<?> postgreSqlContainer;
