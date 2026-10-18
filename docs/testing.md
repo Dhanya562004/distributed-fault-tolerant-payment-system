@@ -1,8 +1,11 @@
 # Test Strategy & Verification Evidence
 
 **System**: Distributed Fault-Tolerant Payment System  
-**Test Suite**: JUnit 5 + Mockito + Spring Boot Test + MockMvc  
-**Execution Status**: **20 Tests Passing (100% Success Rate)**  
+**Test Suite**: JUnit 5 + Mockito + Spring Boot Test + MockMvc + PostgreSQL 16 Testcontainers  
+**Execution Status**: **31 Tests Passing (100% Success Rate)**  
+- Fast H2 In-Memory Suite: 20 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
+- PostgreSQL 16 Testcontainers Suite: 11 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
+**CI/CD Pipeline**: GitHub Actions Run [`39121811229`](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system/actions/runs/39121811229) (All 3 Stages: Fast Tests, PostgreSQL 16 Suite, Packaging & Dashboard Verified)  
 **Target Role**: Standard Chartered Development Engineer (Band 8)  
 
 ---
@@ -13,8 +16,9 @@ Financial systems require uncompromising verification standards. Our testing met
 
 ```mermaid
 pie title Test Suite Distribution
-    "Concurrency & Stress Tests" : 1
+    "Concurrency & Stress Tests" : 2
     "End-to-End Integration Tests" : 1
+    "PostgreSQL 16 Locking & Idempotency" : 10
     "Core Service Unit Tests" : 11
     "REST Controller MockMvc Tests" : 6
     "Fault Tolerance Retry Tests" : 1
@@ -24,7 +28,8 @@ pie title Test Suite Distribution
 
 ## 2. Test Execution Summary
 
-Running `mvn clean test` across the complete project produces:
+### Local Fast Execution (Docker-Free)
+Running `mvn clean test` across the complete project locally on any developer machine (including Windows without Docker Desktop) produces:
 
 - **Total Tests Executed**: 20
 - **Passed**: 20
@@ -32,6 +37,13 @@ Running `mvn clean test` across the complete project produces:
 - **Errors**: 0
 - **Skipped**: 0
 - **Build Status**: **BUILD SUCCESS**
+
+### Dual-Stage GitHub Actions Execution (CI/CD)
+On GitHub Actions Ubuntu runners, both test suites are executed in strict isolation:
+- **Stage A (Fast H2 Suite)**: `mvn clean test -B` (20 passed)
+- **Stage B (PostgreSQL 16 Suite)**: `mvn test -Ppostgres-it -B` (11 passed)
+- **Stage C (Packaging & Dashboard)**: JAR packaged and Streamlit validated
+- **Overall Result**: **31 Tests Run, 31 Passed, 0 Failures, 0 Errors**
 
 ---
 
