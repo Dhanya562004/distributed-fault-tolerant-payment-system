@@ -54,12 +54,17 @@ jobs:
     - name: Print PostgreSQL Test Reports & Benchmark Output
       if: always()
       run: |
+        echo "## PostgreSQL 16 Test Execution & Benchmark Summary" >> $GITHUB_STEP_SUMMARY
         for file in target/surefire-reports/*.txt; do
           if [ -f "$file" ]; then
             echo "================================================================================"
             echo "TEST REPORT: $file"
             echo "================================================================================"
             cat "$file"
+            echo "### Report: $(basename "$file")" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat "$file" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
           fi
         done
 
