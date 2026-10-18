@@ -104,6 +104,7 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
 
         CountDownLatch threadReadyLatch = new CountDownLatch(2);
         CountDownLatch startCommitLatch = new CountDownLatch(1);
+        CountDownLatch txACommittedLatch = new CountDownLatch(1);
         CountDownLatch finishLatch = new CountDownLatch(2);
 
         AtomicBoolean txASucceeded = new AtomicBoolean(false);
@@ -112,7 +113,7 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
 
-        // Thread 1: Reads user, waits, commits first
+        // Thread 1: Reads user, waits for startCommitLatch, commits first, then signals txACommittedLatch
         executor.submit(() -> {
             TransactionTemplate tx1 = new TransactionTemplate(transactionManager);
             tx1.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -121,7 +122,7 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
                     User u1 = userRepository.findByUserCode(userCode).orElseThrow();
                     threadReadyLatch.countDown();
                     try {
-                        startCommitLatch.await();
+                        startCommitLatch.await(5, TimeUnit.SECONDS);
                         u1.setBalance(new BigDecimal("950.0000"));
                         userRepository.saveAndFlush(u1);
                         txASucceeded.set(true);
@@ -133,11 +134,12 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
             } catch (Exception e) {
                 unexpectedError.set(e);
             } finally {
+                txACommittedLatch.countDown(); // Signals Tx 1 has committed to PostgreSQL
                 finishLatch.countDown();
             }
         });
 
-        // Thread 2: Reads user with same version, waits until Thread 1 commits, then attempts update
+        // Thread 2: Reads user with same version, waits until Tx 1 is 100% committed, then attempts update
         executor.submit(() -> {
             TransactionTemplate tx2 = new TransactionTemplate(transactionManager);
             tx2.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -146,9 +148,10 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
                     User u2 = userRepository.findByUserCode(userCode).orElseThrow();
                     threadReadyLatch.countDown();
                     try {
-                        startCommitLatch.await();
-                        // Slight delay to allow Thread 1 to flush and commit first
-                        Thread.sleep(100);
+                        startCommitLatch.await(5, TimeUnit.SECONDS);
+                        // Deterministically await Tx 1 commit before attempting update
+                        boolean tx1Committed = txACommittedLatch.await(5, TimeUnit.SECONDS);
+                        assertTrue(tx1Committed, "Tx 1 must commit before Tx 2 attempts commit");
                         u2.setBalance(new BigDecimal("900.0000"));
                         userRepository.saveAndFlush(u2);
                     } catch (InterruptedException e) {

@@ -49,7 +49,19 @@ jobs:
         cache: maven
 
     - name: Run PostgreSQL 16 Testcontainers Integration Tests & Concurrency Benchmark
-      run: mvn test -Ppostgres-it -B
+      run: mvn test -Ppostgres-it -B -DtrimStackTrace=false
+
+    - name: Print PostgreSQL Test Reports & Benchmark Output
+      if: always()
+      run: |
+        for file in target/surefire-reports/*.txt; do
+          if [ -f "$file" ]; then
+            echo "================================================================================"
+            echo "TEST REPORT: $file"
+            echo "================================================================================"
+            cat "$file"
+          fi
+        done
 
     - name: Archive PostgreSQL Test Reports
       if: always()

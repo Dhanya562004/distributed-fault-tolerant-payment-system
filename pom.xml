@@ -150,11 +150,10 @@
                         <configuration>
                             <argLine>-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true</argLine>
                             <includes>
-                                <include>**/postgres/**</include>
-                                <include>**/*Postgres*</include>
+                                <include>**/postgres/*Test.java</include>
                             </includes>
                             <excludes>
-                                <exclude>none</exclude>
+                                <exclude>**/Abstract*</exclude>
                             </excludes>
                         </configuration>
                     </plugin>

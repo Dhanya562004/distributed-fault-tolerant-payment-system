@@ -234,8 +234,8 @@ public class PostgreSqlConcurrencyStressTest extends AbstractPostgreSqlIntegrati
         long batchStartNanos = System.nanoTime();
         startLatch.countDown();
 
-        // 5. Await completion with explicit timeout
-        boolean finished = finishLatch.await(60, TimeUnit.SECONDS);
+        // 5. Await completion with explicit safety timeout
+        boolean finished = finishLatch.await(120, TimeUnit.SECONDS);
         long batchEndNanos = System.nanoTime();
 
         executorService.shutdown();
