@@ -21,6 +21,7 @@
         <java.version>17</java.version>
         <springdoc.version>2.6.0</springdoc.version>
         <byte-buddy.version>1.15.5</byte-buddy.version>
+        <test.exclude.pattern>**/postgres/**</test.exclude.pattern>
     </properties>
 
     <dependencies>
@@ -83,6 +84,23 @@
             <version>${byte-buddy.version}</version>
         </dependency>
 
+        <!-- Testcontainers -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -110,8 +128,37 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <argLine>-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true</argLine>
+                    <excludes>
+                        <exclude>${test.exclude.pattern}</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>postgres-it</id>
+            <properties>
+                <test.exclude.pattern>none</test.exclude.pattern>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <argLine>-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true</argLine>
+                            <includes>
+                                <include>**/postgres/*Test.java</include>
+                            </includes>
+                            <excludes>
+                                <exclude>**/Abstract*</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

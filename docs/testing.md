@@ -1,8 +1,11 @@
 # Test Strategy & Verification Evidence
 
 **System**: Distributed Fault-Tolerant Payment System  
-**Test Suite**: JUnit 5 + Mockito + Spring Boot Test + MockMvc  
-**Execution Status**: **20 Tests Passing (100% Success Rate)**  
+**Test Suite**: JUnit 5 + Mockito + Spring Boot Test + MockMvc + PostgreSQL 16 Testcontainers  
+**Execution Status**: **31 Tests Passing (100% Success Rate)**  
+- Fast H2 In-Memory Suite: 20 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
+- PostgreSQL 16 Testcontainers Suite: 11 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
+**CI/CD Pipeline**: GitHub Actions Run [`39121811229`](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system/actions/runs/39121811229) (All 3 Stages: Fast Tests, PostgreSQL 16 Suite, Packaging & Dashboard Verified)  
 **Target Role**: Standard Chartered Development Engineer (Band 8)  
 
 ---
@@ -13,8 +16,9 @@ Financial systems require uncompromising verification standards. Our testing met
 
 ```mermaid
 pie title Test Suite Distribution
-    "Concurrency & Stress Tests" : 1
+    "Concurrency & Stress Tests" : 2
     "End-to-End Integration Tests" : 1
+    "PostgreSQL 16 Locking & Idempotency" : 10
     "Core Service Unit Tests" : 11
     "REST Controller MockMvc Tests" : 6
     "Fault Tolerance Retry Tests" : 1
@@ -24,7 +28,8 @@ pie title Test Suite Distribution
 
 ## 2. Test Execution Summary
 
-Running `mvn clean test` across the complete project produces:
+### Local Fast Execution (Docker-Free)
+Running `mvn clean test` across the complete project locally on any developer machine (including Windows without Docker Desktop) produces:
 
 - **Total Tests Executed**: 20
 - **Passed**: 20
@@ -32,6 +37,13 @@ Running `mvn clean test` across the complete project produces:
 - **Errors**: 0
 - **Skipped**: 0
 - **Build Status**: **BUILD SUCCESS**
+
+### Dual-Stage GitHub Actions Execution (CI/CD)
+On GitHub Actions Ubuntu runners, both test suites are executed in strict isolation:
+- **Stage A (Fast H2 Suite)**: `mvn clean test -B` (20 passed)
+- **Stage B (PostgreSQL 16 Suite)**: `mvn test -Ppostgres-it -B` (11 passed)
+- **Stage C (Packaging & Dashboard)**: JAR packaged and Streamlit validated
+- **Overall Result**: **31 Tests Run, 31 Passed, 0 Failures, 0 Errors**
 
 ---
 
@@ -47,6 +59,10 @@ Running `mvn clean test` across the complete project produces:
 | `PaymentControllerTest` | Spring MVC MockMvc | 3 | 1. `POST /api/v1/payments` returns 201 CREATED for sync payment.<br>2. Returns 409 CONFLICT on payload mismatch.<br>3. Supports pagination parameters (`page`, `size`). |
 | `RefundControllerTest` | Spring MVC MockMvc | 3 | 1. `POST /api/v1/refunds` returns 201 CREATED.<br>2. Returns 422 UNPROCESSABLE_ENTITY on invalid state transition.<br>3. `GET /api/v1/refunds/{id}` returns 200 OK. |
 | `PaymentLifecycleIntegrationTest` | E2E Integration | 1 | Complete banking lifecycle: User creation -> Sync payment -> Idempotent replay -> Payload mismatch -> Input validation -> Payment retrieval -> Valid refund -> Over-refund rejection -> Audit trail verification. |
+| `PostgreSqlIdempotencyTest` | Real PostgreSQL 16 Integration | 5 | Validates idempotency key acquisition, in-progress 409 conflict, cached replay without double-charge, payload mismatch rejection, and concurrent duplicate prevention against real PostgreSQL 16. |
+| `PostgreSqlOptimisticLockingTest` | Concurrency / Locking | 3 | Validates JPA `@Version` on `User` and `PaymentTransaction`. Stale entity updates trigger genuine `OptimisticLockingFailureException` in PostgreSQL, preventing lost updates. |
+| `PostgreSqlPessimisticLockingTest` | Concurrency / Locking | 2 | Validates `@Lock(LockModeType.PESSIMISTIC_WRITE)` (`SELECT FOR UPDATE`). Proves PostgreSQL lock manager blocks competing transactions until the lock holder commits. |
+| `PostgreSqlConcurrencyStressTest` | High-Concurrency Stress Benchmark | 1 | 1,000 duplicate requests across 50 worker threads and 3 isolated runs against PostgreSQL 16, measuring latency percentiles (p50, p95, p99) and single-charge database persistence. |
 
 ---
 
@@ -110,3 +126,30 @@ Following each benchmark run, persisted database records are directly queried an
 
 ### 4.3 Payload Mismatch Conflict Detection
 `IdempotencyServiceTest.testTryAcquire_PayloadMismatch_ThrowsException` and `PaymentControllerTest.testInitiatePayment_PayloadMismatch_ReturnsConflict` verify that re-using an idempotency key with a different payload throws `PayloadMismatchException` and yields HTTP 409 Conflict.
+
+### 4.4 Real PostgreSQL 16 Testcontainers Architecture
+To bridge the fidelity gap between in-memory H2 and production PostgreSQL, ApexPay incorporates genuine PostgreSQL 16 integration testing:
+- **Managed Singleton Container Lifecycle**: Implemented in `AbstractPostgreSqlIntegrationTest`, spin-up occurs once per JVM run, sharing the `postgres:16-alpine` container across test classes.
+- **Dynamic Spring DataSource Binding**: `@DynamicPropertySource` dynamically injects the ephemeral mapped port and credentials without hardcoded configuration.
+- **Zero-Docker Local Experience**: Local developers run `mvn clean test`, which excludes the PostgreSQL suite via `<test.exclude.pattern>**/postgres/**</test.exclude.pattern>`, completing in ~3 seconds.
+- **Automated CI/CD Pipeline**: GitHub Actions executes the full test suite in two sequential stages:
+  - **Stage A**: `mvn clean test` (Fast H2 tests)
+  - **Stage B**: `mvn test -Ppostgres-it` (Real PostgreSQL 16 Testcontainers suite on Ubuntu runner)
+
+### 4.5 PostgreSQL Optimistic Locking Verification (`@Version`)
+`PostgreSqlOptimisticLockingTest` validates optimistic concurrency control on `User` (`version`) and `PaymentTransaction` (`lock_version`):
+- Two independent transactions read the identical record at version 0.
+- Transaction A updates the record and commits, incrementing the version in PostgreSQL to 1.
+- Transaction B attempts to flush an update referencing the stale entity (version 0).
+- Hibernate generates `UPDATE ... WHERE id = ? AND version = 0`, matching 0 rows in PostgreSQL.
+- Spring Data JPA immediately raises `OptimisticLockingFailureException`.
+- Database consistency is verified: Transaction A's state is preserved, and no lost update occurs.
+
+### 4.6 PostgreSQL Pessimistic Row-Level Locking Verification (`SELECT FOR UPDATE`)
+`PostgreSqlPessimisticLockingTest` verifies exclusive row locking via `@Lock(LockModeType.PESSIMISTIC_WRITE)`:
+- Transaction A calls `userRepository.findByUserCodeForUpdate(userCode)`. PostgreSQL executes `SELECT ... FOR UPDATE`, holding an exclusive tuple lock.
+- Transaction B concurrently calls `userRepository.findByUserCodeForUpdate(userCode)` on a separate thread.
+- **Blocking Verification**: Transaction B is verified to be blocked by PostgreSQL's lock manager while Transaction A holds the lock.
+- Once Transaction A updates the balance and commits, PostgreSQL releases the lock.
+- Transaction B immediately unblocks, reads Transaction A's committed balance, and applies its update sequentially.
+- Final user balance confirms strict serialization and zero lost updates.

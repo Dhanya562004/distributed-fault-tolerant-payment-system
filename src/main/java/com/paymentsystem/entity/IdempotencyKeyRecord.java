@@ -29,8 +29,7 @@ public class IdempotencyKeyRecord {
     @Column(name = "status", nullable = false, length = 32)
     private Status status;
 
-    @Lob
-    @Column(name = "response_body")
+    @Column(name = "response_body", columnDefinition = "TEXT")
     private String responseBody;
 
     @Column(name = "http_status_code")

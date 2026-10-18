@@ -9,14 +9,12 @@
 
 ## 1. Automated Build & Test Execution Summary
 
-The complete codebase was verified cleanly using Maven on Java 17 / Java 24:
+The complete codebase was verified cleanly using Maven on Java 17 / Java 24 across dual stages:
 
-### Test Execution Command
+### A. Local Fast Execution (Docker-Free)
 ```bash
 mvn clean test
 ```
-
-### Execution Output & Metrics
 - **Total Tests Run**: 20
 - **Passed**: 20
 - **Failures**: 0
@@ -25,15 +23,25 @@ mvn clean test
 - **Execution Time**: ~31.2 seconds
 - **Build Outcome**: **BUILD SUCCESS**
 
+### B. PostgreSQL 16 Testcontainers Execution (CI Pipeline)
+```bash
+mvn test -Ppostgres-it -B
 ```
-[INFO] Results:
-[INFO] 
-[INFO] Tests run: 20, Failures: 0, Errors: 0, Skipped: 0
-[INFO] 
-[INFO] ------------------------------------------------------------------------
-[INFO] BUILD SUCCESS
-[INFO] ------------------------------------------------------------------------
-```
+- **Total Tests Run**: 11
+- **Passed**: 11
+- **Failures**: 0
+- **Errors**: 0
+- **Skipped**: 0
+- **Execution Time**: ~32.0 seconds
+- **Build Outcome**: **BUILD SUCCESS**
+- **Verified CI Run**: [GitHub Actions Run 39121811229](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system/actions/runs/39121811229)
+
+### Total Project Test Coverage
+- **Total Tests**: **31 Tests**
+- **Passed**: **31 (100% Pass Rate)**
+- **Failures**: 0
+- **Errors**: 0
+- **Skipped**: 0
 
 ---
 
@@ -41,7 +49,7 @@ mvn clean test
 
 | # | Test Class | Package | Tests Run | Result | Key Verified Assertions |
 | :-: | :--- | :--- | :-: | :-: | :--- |
-| **1** | `ConcurrentPaymentTest` | `com.paymentsystem.service` | 1 | **PASSED** | 10 parallel threads; exactly 1 success; 9 lock conflicts handled; user balance deducted exactly once. |
+| **1** | `ConcurrentPaymentTest` | `com.paymentsystem.service` | 1 | **PASSED** | 50 parallel threads / 1,000 requests; exactly 1 success; 999 lock conflicts handled; user balance deducted exactly once. |
 | **2** | `FaultToleranceRetryTest` | `com.paymentsystem.service` | 1 | **PASSED** | Transient gateway socket timeouts trigger exponential backoff with full jitter; recovery on attempt 2. |
 | **3** | `IdempotencyServiceTest` | `com.paymentsystem.service` | 4 | **PASSED** | New key lock, in-progress conflict, cached completed hit, and payload hash mismatch rejection (`PayloadMismatchException`). |
 | **4** | `PaymentProcessingServiceTest` | `com.paymentsystem.service` | 3 | **PASSED** | Payment success balance check, fail-fast on insufficient balance (0 retries), and paginated payment retrieval. |
@@ -49,6 +57,10 @@ mvn clean test
 | **6** | `PaymentControllerTest` | `com.paymentsystem.controller` | 3 | **PASSED** | POST 201 Created, POST 409 Conflict on payload mismatch, and GET pagination support (`page`, `size`). |
 | **7** | `RefundControllerTest` | `com.paymentsystem.controller` | 3 | **PASSED** | POST 201 Created, POST 422 Unprocessable Entity on invalid state, and GET 200 OK refund details. |
 | **8** | `PaymentLifecycleIntegrationTest` | `com.paymentsystem.integration` | 1 | **PASSED** | Complete end-to-end banking flow: user registration -> payment -> cached replay -> payload conflict -> validation -> refund -> over-refund rejection -> audit logs. |
+| **9** | `PostgreSqlOptimisticLockingTest` | `com.paymentsystem.postgres` | 3 | **PASSED** | JPA `@Version` on User and PaymentTransaction; stale update causes `OptimisticLockingFailureException`; lost updates prevented. |
+| **10** | `PostgreSqlPessimisticLockingTest` | `com.paymentsystem.postgres` | 2 | **PASSED** | `@Lock(PESSIMISTIC_WRITE)` (`SELECT FOR UPDATE`); competing transactions blocked at DB lock manager until commit; serial balance safety verified. |
+| **11** | `PostgreSqlIdempotencyTest` | `com.paymentsystem.postgres` | 5 | **PASSED** | Atomic key acquisition, in-progress 409 conflict, cached replay without double-charge, payload mismatch rejection, and concurrent duplicate prevention. |
+| **12** | `PostgreSqlConcurrencyStressTest` | `com.paymentsystem.postgres` | 1 | **PASSED** | 1,000 duplicate requests against real PostgreSQL 16; 50 worker threads; exactly 1 original charge; 0 double spending. |
 
 ---
 

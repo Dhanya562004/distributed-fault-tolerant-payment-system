@@ -2,12 +2,13 @@ name: Java CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "feat/**" ]
   pull_request:
     branches: [ "main", "master" ]
 
 jobs:
-  build-and-test:
+  stage-a-fast-tests:
+    name: "Stage A: Fast Tests (H2 In-Memory)"
     runs-on: ubuntu-latest
 
     steps:
@@ -21,8 +22,74 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
-    - name: Build & Run Unit and Integration Tests
+    - name: Run Fast H2 Unit & Integration Tests
       run: mvn clean test -B
+
+    - name: Archive H2 Test Reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: h2-surefire-reports
+        path: target/surefire-reports/
+
+  stage-b-postgresql-integration:
+    name: "Stage B: PostgreSQL 16 Testcontainers Suite"
+    runs-on: ubuntu-latest
+    needs: stage-a-fast-tests
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+
+    - name: Run PostgreSQL 16 Testcontainers Integration Tests & Concurrency Benchmark
+      run: mvn test -Ppostgres-it -B -DtrimStackTrace=false
+
+    - name: Print PostgreSQL Test Reports & Benchmark Output
+      if: always()
+      run: |
+        echo "## PostgreSQL 16 Test Execution & Benchmark Summary" >> $GITHUB_STEP_SUMMARY
+        for file in target/surefire-reports/*.txt; do
+          if [ -f "$file" ]; then
+            echo "================================================================================"
+            echo "TEST REPORT: $file"
+            echo "================================================================================"
+            cat "$file"
+            echo "### Report: $(basename "$file")" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat "$file" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+        done
+
+    - name: Archive PostgreSQL Test Reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: postgresql-surefire-reports
+        path: target/surefire-reports/
+
+  build-and-verify:
+    name: "Application Packaging & Dashboard Verification"
+    runs-on: ubuntu-latest
+    needs: stage-b-postgresql-integration
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
 
     - name: Build Application JAR
       run: mvn package -DskipTests -B

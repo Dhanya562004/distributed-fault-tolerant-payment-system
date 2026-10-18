@@ -10,7 +10,7 @@
 [![Spring Boot 3.3.4](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F.svg?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
 [![Docker Container](https://img.shields.io/badge/Docker-Multi--Stage%20Container-2496ED.svg?style=flat-square&logo=docker)](Dockerfile)
 [![Polyglot Persistence](https://img.shields.io/badge/Storage-PostgreSQL%20%7C%20MongoDB%20%7C%20H2-336791.svg?style=flat-square&logo=postgresql)](docs/architecture.md)
-[![Automated Tests](https://img.shields.io/badge/Tests-20%20Passing%20(100%25)-10B981.svg?style=flat-square&logo=checkmarx)](docs/testing.md)
+[![Automated Tests](https://img.shields.io/badge/Tests-31%20Passing%20(100%25)-10B981.svg?style=flat-square&logo=checkmarx)](docs/testing.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 
 <p align="center">
@@ -224,7 +224,7 @@ This provisions:
 
 The test suite validates correctness under heavy contention and failure scenarios:
 
-- **20 Automated Tests**: **20 Passed, 0 Failures, 0 Errors** (100% Pass Rate).
+- **31 Automated Tests**: **31 Passed, 0 Failures, 0 Errors** (100% Pass Rate across 20 Fast H2 + 11 PostgreSQL 16 Testcontainers tests).
 - **1,000-Request Concurrency Stress Benchmark (`ConcurrentPaymentTest`)**:
   - **Objective**: Flood the payment engine with 1,000 concurrent duplicate payment requests sharing the exact same idempotency key and payload to verify zero double-spending, atomic locks, and idempotency guarantees under extreme contention.
   - **Concurrency Model**: Bounded `ExecutorService` configured with 50 worker threads coordinated via a `CountDownLatch` dual-barrier (`readyLatch` and `startLatch`) to ensure simultaneous worker contention.
@@ -249,7 +249,29 @@ The test suite validates correctness under heavy contention and failure scenario
     - **Unexpected Failures**: Exactly **0** unexpected errors across all 3,000 requests.
   - **Known Limitations & Scope**:
     - **Service-Level Benchmark**: Invokes `PaymentProcessingService.initiatePayment()` directly in-process; does not measure HTTP/Tomcat serialization or network overhead.
-    - **Database Environment**: Executed against in-memory H2 (in PostgreSQL compatibility mode). H2 in-memory transaction lock latencies and throughput do not reflect distributed multi-node PostgreSQL over a physical network.
+- **PostgreSQL 16 Testcontainers Integration & Locking Suite (`com.paymentsystem.postgres.*`)**:
+  - **Why Real PostgreSQL Testing**: In-memory H2 emulates PostgreSQL syntax but uses different concurrency semantics, table-level/coarse locking, and zero network socket I/O. Real PostgreSQL 16 testing via Testcontainers validates authentic multi-version concurrency control (MVCC), row-level locks, and transaction isolation.
+  - **Docker-Free Local Development**: The local test suite (`mvn clean test`) excludes Testcontainers and runs the 20 fast H2 tests in ~3 seconds with zero Docker requirement.
+  - **GitHub Actions Execution**: Automated 2-stage CI pipeline executes fast H2 tests first (Stage A) followed by the PostgreSQL 16 Testcontainers suite on Ubuntu runners with Docker pre-installed (Stage B).
+  - **PostgreSQL Test Suites**:
+    1. **Idempotency & Replay Invariants (`PostgreSqlIdempotencyTest`)**:
+       - Validates atomic insert on unique constraint, in-progress HTTP 409 conflict, cached replay return, payload mismatch rejection, and concurrent duplicate prevention.
+    2. **Optimistic Locking Verification (`PostgreSqlOptimisticLockingTest`)**:
+       - Validates JPA `@Version` on `User` (`version`) and `PaymentTransaction` (`lock_version`).
+       - Stale entity update triggers genuine `OptimisticLockingFailureException` and preserves database consistency.
+    3. **Pessimistic Row-Level Locking Verification (`PostgreSqlPessimisticLockingTest`)**:
+       - Validates `@Lock(LockModeType.PESSIMISTIC_WRITE)` (`SELECT FOR UPDATE`) on `UserRepository.findByUserCodeForUpdate()` and `PaymentTransactionRepository.findByPaymentIdForUpdate()`.
+       - Proves competing transactions are blocked at the database level by PostgreSQL's lock manager until the lock-holding transaction commits.
+    4. **1,000-Request Concurrency Stress Benchmark (`PostgreSqlConcurrencyStressTest`)**:
+       - Exercises the 1,000 duplicate request benchmark against real PostgreSQL 16 across 50 worker threads and 3 isolated runs.
+  - **Commands**:
+    ```bash
+    # Run fast H2 test suite locally (Zero Docker required)
+    mvn clean test
+
+    # Run PostgreSQL 16 Testcontainers suite (Requires Docker / executed in GitHub Actions)
+    mvn test -Ppostgres-it
+    ```
 - **Fail-Fast Verification (`PaymentProcessingServiceTest`)**: Insufficient account balance fails on Attempt 1 with 0 retries.
 - **Payload Conflict Verification (`IdempotencyServiceTest`)**: Same key with different payload triggers HTTP 409 Conflict (`PayloadMismatchException`).
 - **Cumulative Refund Limits (`RefundProcessingServiceTest`)**: Multiple refunds totaling more than transaction amount rejected with HTTP 422.
@@ -265,7 +287,7 @@ The test suite validates correctness under heavy contention and failure scenario
 | 🏛️ **[System Architecture](docs/architecture.md)** | Deep-dive into distributed topology, concurrency models, partitioned queues, and retry loops. |
 | ⚖️ **[Architectural Decision Records (ADRs)](docs/design-decisions.md)** | Rationale for SHA-256 payload digests, fail-fast error classification, and polyglot storage. |
 | 🔌 **[REST API Guide](docs/api-guide.md)** | Complete HTTP endpoints, OpenAPI 3.0 schemas, headers, pagination, and error responses. |
-| 🧪 **[Test Strategy & Verification](docs/testing.md)** | Verification evidence for 20 automated tests, concurrency stress test, and retry resilience. |
+| 🧪 **[Test Strategy & Verification](docs/testing.md)** | Verification evidence for 31 automated tests, PostgreSQL 16 Testcontainers, concurrency stress test, and locking mechanisms. |
 | 🎯 **[Technical Interview Preparation](docs/interview-preparation.md)** | 14 rigorous interview questions and concise code-backed architectural explanations. |
 | 📝 **[Initial Codebase Audit](docs/initial-audit.md)** | Forensic analysis of baseline code, identified edge cases, and upgrade roadmap. |
 | 📜 **[Development Log](docs/dev-log.md)** | Chronological log of changes, refactorings, and verification commands. |
