@@ -39,7 +39,7 @@ Running `mvn clean test` across the complete project produces:
 
 | Test Suite Class | Type | Tests | Key Capabilities Verified |
 | :--- | :--- | :-: | :--- |
-| `ConcurrentPaymentTest` | Multi-Threaded Stress | 1 | 10 parallel threads submitting identical idempotency keys; verifies single execution, 9 lock conflicts caught, and zero double-spending. |
+| `ConcurrentPaymentTest` | High-Concurrency Stress Benchmark | 1 | 1,000 concurrent duplicate requests across 3 isolated runs; bounded 50-worker pool; verifies exactly 1 charge processed, cached replays, 409 conflict handling, zero double-spending, and detailed p50/p95/p99 latency metrics. |
 | `FaultToleranceRetryTest` | Fault Simulation | 1 | Injected gateway socket read timeouts; validates exponential backoff with jitter and successful recovery on subsequent attempt. |
 | `IdempotencyServiceTest` | Unit / Mockito | 4 | 1. New key acquisition lock.<br>2. Concurrent in-progress request conflict.<br>3. Cached response return on identical replay.<br>4. Reused key with payload mismatch rejection (`PayloadMismatchException`). |
 | `PaymentProcessingServiceTest` | Unit / Mockito | 3 | 1. Sufficient balance payment authorization.<br>2. Insufficient balance fail-fast check (`InsufficientBalanceException` with 0 retries).<br>3. Collection pagination (`page`, `size`). |
@@ -52,11 +52,55 @@ Running `mvn clean test` across the complete project produces:
 
 ## 4. Key Verified Invariants
 
-### 4.1 Zero Double-Spending Under 10 Parallel Threads
-`ConcurrentPaymentTest` launches 10 concurrent threads against a single user account ($1,000 balance).
-- **Result**: Exactly 1 thread successfully acquired the atomic lock and processed the transaction.
-- **Result**: 9 threads encountered managed concurrency lock conflicts and were gracefully rejected without executing side effects.
-- **Final Balance**: Exactly $900.00 (deducted exactly once).
+### 4.1 Zero Double-Spending Under 1,000 Concurrent Duplicate Requests
+
+`ConcurrentPaymentTest` bombards the payment engine with **1,000 duplicate requests sharing the same idempotency key and payload** across **3 isolated, repeatable benchmark runs**.
+
+#### Concurrency & Benchmark Configuration
+- **Total Requests**: 1,000 per run (3,000 requests total across 3 runs).
+- **Worker Concurrency**: Bounded `ExecutorService` with 50 worker threads (`benchmark.workers=50`).
+- **Coordination Mechanism**: Dual `CountDownLatch` barrier (`readyLatch` for thread warmup, `startLatch` for simultaneous microsecond release, `finishLatch` with 60-second safety timeout).
+- **Timing Resolution**: `System.nanoTime()` for high-precision per-request latency tracking and batch throughput.
+- **Percentile Calculation Method**: Nearest-rank discrete sample percentile method:
+  $$\text{rank} = \left\lceil \frac{p}{100} \times N \right\rceil, \quad \text{index} = \max(0, \text{rank} - 1)$$
+
+#### Execution Commands
+```bash
+# Execute the 1,000-request concurrency stress test independently
+mvn test -Dtest=ConcurrentPaymentTest
+
+# Execute the complete automated test suite
+mvn clean test
+```
+
+#### Empirical Benchmark Results (Service-Level Performance)
+```
+=========================================================================================================
+ APEXPAY 1,000-REQUEST CONCURRENCY BENCHMARK SUMMARY (SERVICE-LEVEL PERFORMANCE)
+=========================================================================================================
+Run    | Requests | Workers  | Throughput   | Total Time | Avg Latency  | p50 (Med)  | p95        | p99       
+---------------------------------------------------------------------------------------------------------
+#1     | 1000     | 50       |    554.7 rps |   1802.7 ms |   87.744 ms |    6.789 ms |  629.064 ms | 1708.116 ms
+#2     | 1000     | 50       |    902.9 rps |   1107.6 ms |   48.808 ms |    4.274 ms |  344.781 ms |  377.274 ms
+#3     | 1000     | 50       |   1527.6 rps |    654.6 ms |   28.120 ms |    2.062 ms |  166.966 ms |  404.663 ms
+=========================================================================================================
+```
+
+#### Concurrency Outcome Breakdown (Per Run)
+- **Original Charges Processed**: Exactly **1** per run (authorized with `PaymentStatus.SUCCESS`).
+- **Cached Idempotent Replays**: Automatically served cached HTTP 200 payload once the primary transaction finished.
+- **Expected In-Flight Duplicate Conflicts**: HTTP 409 (`DuplicateRequestException`) handled gracefully while primary transaction was in progress.
+- **Unexpected Failures**: Exactly **0** unexpected errors or exceptions across all 3,000 requests.
+
+#### Rigorous Database State Validation
+Following each benchmark run, persisted database records are directly queried and validated:
+1. **Single Payment Record**: Querying `payments` table confirms `count(idempotencyKey) == 1`.
+2. **Single Balance Deduction**: User account balance decreased from $1,000.00 to $900.00 **exactly once** ($100.00 charge). **Zero double-spending**.
+3. **Consistent Idempotency Key**: Querying `idempotency_keys` table confirms status `COMPLETED`, HTTP status code 200, and non-null serialized response payload referencing the payment ID.
+
+#### Known Benchmark Scope & Limitations
+- **Service-Level Performance**: Measurements represent in-process service execution latency. HTTP deserialization and network serialization are excluded.
+- **In-Memory H2 vs. PostgreSQL**: Executed against H2 in PostgreSQL compatibility mode. Lock contention and latency profiles in H2 do not reflect distributed multi-node PostgreSQL over a physical network.
 
 ### 4.2 Fail-Fast Non-Retryable Error Handling
 `PaymentProcessingServiceTest.testInitiatePayment_InsufficientBalance` validates that business errors do not waste retries.
