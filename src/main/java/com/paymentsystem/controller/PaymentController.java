@@ -43,11 +43,16 @@ public class PaymentController {
 
         PaymentResponse response = paymentProcessingService.initiatePayment(request);
 
-        if (Boolean.TRUE.equals(request.getAsyncProcessing())) {
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
-        } else {
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        HttpStatus status = Boolean.TRUE.equals(request.getAsyncProcessing())
+                ? HttpStatus.ACCEPTED
+                : HttpStatus.CREATED;
+
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(status);
+        if (Boolean.TRUE.equals(response.getIsCachedIdempotentResponse())) {
+            builder.header("Idempotent-Replayed", "true");
         }
+
+        return builder.body(response);
     }
 
     @GetMapping("/{paymentId}")

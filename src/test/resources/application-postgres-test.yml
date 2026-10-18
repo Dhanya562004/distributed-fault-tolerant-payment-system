@@ -35,3 +35,7 @@ logging:
     root: INFO
     com.paymentsystem: INFO
     org.testcontainers: INFO
+
+app:
+  idempotency:
+    retention-hours: 24

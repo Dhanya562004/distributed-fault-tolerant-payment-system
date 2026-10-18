@@ -10,12 +10,12 @@
 [![Spring Boot 3.3.4](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F.svg?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
 [![Docker Container](https://img.shields.io/badge/Docker-Multi--Stage%20Container-2496ED.svg?style=flat-square&logo=docker)](Dockerfile)
 [![Polyglot Persistence](https://img.shields.io/badge/Storage-PostgreSQL%20%7C%20MongoDB%20%7C%20H2-336791.svg?style=flat-square&logo=postgresql)](docs/architecture.md)
-[![Automated Tests](https://img.shields.io/badge/Tests-31%20Passing%20(100%25)-10B981.svg?style=flat-square&logo=checkmarx)](docs/testing.md)
+[![Automated Tests](https://img.shields.io/badge/Tests-51%20Passing%20(100%25)-10B981.svg?style=flat-square&logo=checkmarx)](docs/testing.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 
 <p align="center">
   <b>A Production-Grade, Resilient Transaction Processing Engine modeled after tier-1 banking systems at Standard Chartered Bank, Stripe, and PayPal.</b><br>
-  Built with <b>Java 17, Spring Boot 3.3, and Python Streamlit</b> featuring <b>distributed cryptographic idempotency</b>, <b>account-partitioned concurrency queues</b>, <b>exponential backoff with full jitter</b>, <b>fail-fast failure classification</b>, and <b>immutable NoSQL audit trails</b>.
+  Built with <b>Java 17, Spring Boot 3.3, and Python Streamlit</b> featuring <b>distributed cryptographic idempotency</b>, <b>24-hour retention expiry</b>, <b>Idempotent-Replayed HTTP headers</b>, <b>account-partitioned concurrency queues</b>, <b>exponential backoff with full jitter</b>, <b>fail-fast failure classification</b>, and <b>immutable NoSQL audit trails</b>.
 </p>
 
 [🎮 Launch Cloud Control Room](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/) • [🔌 Explore OpenAPI Specification](https://apexpay-backend-sc5s.onrender.com/swagger-ui.html) • [📑 Engineering Docs Suite](#-engineering-documentation-suite)
@@ -44,12 +44,14 @@ flowchart TD
     subgraph Core Payment Engine
         Gateway --> IdempotencyGuard{🔐 Distributed Idempotency Guard}
         
-        IdempotencyGuard -->|Key & Payload Match| CachedHit[⚡ Return Cached 200 OK Response]
+        IdempotencyGuard -->|Key Valid & Completed| CachedHit[⚡ Return Cached 200 OK + Header Idempotent-Replayed: true]
         IdempotencyGuard -->|Key Reused + Payload Mismatch| ConflictReject[🚫 409 Conflict: Payload Mismatch]
         IdempotencyGuard -->|Key In-Flight| LockReject[⏳ 409 Conflict: Duplicate In-Flight]
+        IdempotencyGuard -->|Key Expired >24h UTC| AtomicReuse[🔄 Atomic Re-Acquisition: UPDATE ... WHERE expires_at <= now]
         IdempotencyGuard -->|New Unique Token| AcquireAtomicLock[🔒 Acquire Atomic DB Lock & Token]
         
-        AcquireAtomicLock --> RouteDecision{Processing Mode}
+        AtomicReuse --> RouteDecision{Processing Mode}
+        AcquireAtomicLock --> RouteDecision
         
         RouteDecision -->|Synchronous Payment| SyncWorker[Direct Authorization Engine]
         RouteDecision -->|Async Partition Queue| PartitionRouter[Consistent Hashing: Math.abs userId.hashCode % 4]
@@ -124,10 +126,14 @@ The visual dashboard ([`dashboard/app.py`](dashboard/app.py)) connects out-of-th
 
 ## ⚙️ Core Engineering Capabilities
 
-### 1. 🛡️ Cryptographic Idempotency & Conflict Guard
+### 1. 🛡️ Cryptographic Idempotency, 24-Hour Expiry & Replay Guard
 - **Atomic SQL Token Locks**: Evaluates `X-Idempotency-Key` using database-level `UNIQUE` constraints in PostgreSQL / H2.
-- **SHA-256 Digest Verification**: Prevents key hijacking. If an idempotency key is reused with a different request payload, the engine rejects it immediately with `PayloadMismatchException` (HTTP 409 Conflict).
-- **In-Flight Lock Protection**: Rejects concurrent requests for the same key with `DuplicateRequestException` (HTTP 409 Conflict).
+- **24-Hour Retention Period**: Idempotency keys have a configurable 24-hour retention period (`app.idempotency.retention-hours: 24`). Re-submitting an identical request within this window returns the cached response.
+- **`Idempotent-Replayed: true` Response Header**: When a completed payment or refund is served from the idempotency cache, the HTTP response includes `Idempotent-Replayed: true`. Original payment executions do NOT return this header.
+- **Atomic Expired-Key Reuse**: Once a key passes its 24-hour UTC expiry boundary, clients can safely reuse the key for a fresh payment. An atomic conditional update (`UPDATE ... WHERE expires_at <= :now`) with PostgreSQL row-level locks guarantees that concurrent requests reusing an expired key cannot double-charge.
+- **SHA-256 Digest Verification**: Prevents key tampering. Reusing an unexpired key with a modified payload triggers an immediate `PayloadMismatchException` (HTTP 409 Conflict) without a replay header.
+- **In-Flight Lock Protection**: Rejects concurrent in-flight requests for the same key with `DuplicateRequestException` (HTTP 409 Conflict).
+- **Safe Background Expiration Cleanup**: Scheduled hourly cron task (`cleanupExpiredKeys`) purges expired tokens while strictly preserving active (`IN_PROGRESS`) transactions, payment records, and immutable audit trails.
 
 ### 2. 🔁 Intelligent Failure Taxonomy & Exponential Backoff
 - **Fail-Fast Business Errors**: Non-retryable errors (`InsufficientBalanceException`, `PayloadMismatchException`, `InvalidTransactionStateException`) fail fast on Attempt 1 with zero retries.
@@ -153,11 +159,11 @@ The visual dashboard ([`dashboard/app.py`](dashboard/app.py)) connects out-of-th
 
 | HTTP Method | Endpoint | Parameters / Headers | Description |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/api/v1/payments` | `X-Idempotency-Key` (Optional Header) | Initiate synchronous or partitioned asynchronous payment transaction |
+| `POST` | `/api/v1/payments` | `X-Idempotency-Key` (Optional Header) | Initiate synchronous or partitioned asynchronous payment. Cached replays return `Idempotent-Replayed: true` |
 | `GET` | `/api/v1/payments/{paymentId}` | `paymentId` (Path) | Query payment status, metadata, and retry count |
 | `GET` | `/api/v1/payments` | `page`, `size` (Query) | List payment records with pagination |
 | `GET` | `/api/v1/payments/user/{userId}` | `userId` (Path), `page`, `size` | List all payment transactions for a specific user |
-| `POST` | `/api/v1/refunds` | `X-Idempotency-Key` (Optional Header) | Process refund with cumulative balance ceiling checks |
+| `POST` | `/api/v1/refunds` | `X-Idempotency-Key` (Optional Header) | Process refund with cumulative ceiling checks. Cached replays return `Idempotent-Replayed: true` |
 | `GET` | `/api/v1/refunds/{refundId}` | `refundId` (Path) | Query refund record details |
 | `GET` | `/api/v1/refunds/payment/{paymentId}` | `paymentId` (Path) | Query all refunds associated with a payment |
 | `POST` | `/api/v1/users` | JSON Payload | Register a new user account with starting balance |
@@ -224,7 +230,7 @@ This provisions:
 
 The test suite validates correctness under heavy contention and failure scenarios:
 
-- **31 Automated Tests**: **31 Passed, 0 Failures, 0 Errors** (100% Pass Rate across 20 Fast H2 + 11 PostgreSQL 16 Testcontainers tests).
+- **51 Automated Tests**: **51 Passed, 0 Failures, 0 Errors** (100% Pass Rate across 38 Fast H2 + 13 PostgreSQL 16 Testcontainers tests).
 - **1,000-Request Concurrency Stress Benchmark (`ConcurrentPaymentTest`)**:
   - **Objective**: Flood the payment engine with 1,000 concurrent duplicate payment requests sharing the exact same idempotency key and payload to verify zero double-spending, atomic locks, and idempotency guarantees under extreme contention.
   - **Concurrency Model**: Bounded `ExecutorService` configured with 50 worker threads coordinated via a `CountDownLatch` dual-barrier (`readyLatch` and `startLatch`) to ensure simultaneous worker contention.
@@ -251,11 +257,12 @@ The test suite validates correctness under heavy contention and failure scenario
     - **Service-Level Benchmark**: Invokes `PaymentProcessingService.initiatePayment()` directly in-process; does not measure HTTP/Tomcat serialization or network overhead.
 - **PostgreSQL 16 Testcontainers Integration & Locking Suite (`com.paymentsystem.postgres.*`)**:
   - **Why Real PostgreSQL Testing**: In-memory H2 emulates PostgreSQL syntax but uses different concurrency semantics, table-level/coarse locking, and zero network socket I/O. Real PostgreSQL 16 testing via Testcontainers validates authentic multi-version concurrency control (MVCC), row-level locks, and transaction isolation.
-  - **Docker-Free Local Development**: The local test suite (`mvn clean test`) excludes Testcontainers and runs the 20 fast H2 tests in ~3 seconds with zero Docker requirement.
+  - **Docker-Free Local Development**: The local test suite (`mvn clean test`) excludes Testcontainers and runs the 38 fast H2 tests in ~3 seconds with zero Docker requirement.
   - **GitHub Actions Execution**: Automated 2-stage CI pipeline executes fast H2 tests first (Stage A) followed by the PostgreSQL 16 Testcontainers suite on Ubuntu runners with Docker pre-installed (Stage B).
   - **PostgreSQL Test Suites**:
     1. **Idempotency & Replay Invariants (`PostgreSqlIdempotencyTest`)**:
        - Validates atomic insert on unique constraint, in-progress HTTP 409 conflict, cached replay return, payload mismatch rejection, and concurrent duplicate prevention.
+       - Validates 24-hour expired key atomic reuse and concurrent expired-key reuse prevention of double-charge via row-level locks.
     2. **Optimistic Locking Verification (`PostgreSqlOptimisticLockingTest`)**:
        - Validates JPA `@Version` on `User` (`version`) and `PaymentTransaction` (`lock_version`).
        - Stale entity update triggers genuine `OptimisticLockingFailureException` and preserves database consistency.

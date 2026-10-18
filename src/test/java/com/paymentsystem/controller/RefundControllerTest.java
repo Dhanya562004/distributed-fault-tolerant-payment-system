@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -88,6 +89,60 @@ class RefundControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.error").value("INVALID_TRANSACTION_STATE"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/refunds should include Idempotent-Replayed: true header when refund response is cached")
+    void testProcessRefund_CachedReplay_ReturnsIdempotentReplayedHeader() throws Exception {
+        ProcessRefundRequest request = new ProcessRefundRequest(
+                "PAY_1001", "IDEM_REF_REPLAY", new BigDecimal("50.00"), "Replay return"
+        );
+
+        RefundResponse response = new RefundResponse();
+        response.setRefundId("REF_1001");
+        response.setPaymentId("PAY_1001");
+        response.setUserId("USR_ALICE");
+        response.setAmount(new BigDecimal("50.00"));
+        response.setStatus(PaymentStatus.REFUNDED);
+        response.setIsCachedIdempotentResponse(true);
+
+        when(refundProcessingService.processRefund(any(ProcessRefundRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/refunds")
+                        .header("X-Idempotency-Key", "IDEM_REF_REPLAY")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Idempotent-Replayed", "true"))
+                .andExpect(jsonPath("$.refundId").value("REF_1001"))
+                .andExpect(jsonPath("$.status").value("REFUNDED"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/refunds should NOT include Idempotent-Replayed header on original refund execution")
+    void testProcessRefund_OriginalExecution_DoesNotReturnReplayHeader() throws Exception {
+        ProcessRefundRequest request = new ProcessRefundRequest(
+                "PAY_1001", "IDEM_REF_ORIG", new BigDecimal("50.00"), "Original return"
+        );
+
+        RefundResponse response = new RefundResponse();
+        response.setRefundId("REF_1002");
+        response.setPaymentId("PAY_1001");
+        response.setUserId("USR_ALICE");
+        response.setAmount(new BigDecimal("50.00"));
+        response.setStatus(PaymentStatus.REFUNDED);
+        response.setIsCachedIdempotentResponse(false);
+
+        when(refundProcessingService.processRefund(any(ProcessRefundRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/refunds")
+                        .header("X-Idempotency-Key", "IDEM_REF_ORIG")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(header().doesNotExist("Idempotent-Replayed"))
+                .andExpect(jsonPath("$.refundId").value("REF_1002"))
+                .andExpect(jsonPath("$.status").value("REFUNDED"));
     }
 
     @Test

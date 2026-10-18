@@ -36,7 +36,11 @@ public class RefundController {
         }
 
         RefundResponse response = refundProcessingService.processRefund(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.CREATED);
+        if (Boolean.TRUE.equals(response.getIsCachedIdempotentResponse())) {
+            builder.header("Idempotent-Replayed", "true");
+        }
+        return builder.body(response);
     }
 
     @GetMapping("/{refundId}")

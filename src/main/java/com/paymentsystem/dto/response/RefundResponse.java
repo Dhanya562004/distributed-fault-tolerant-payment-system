@@ -66,11 +66,21 @@ public class RefundResponse {
         this.reason = reason;
     }
 
+    private Boolean isCachedIdempotentResponse = false;
+
     public Instant getCreatedAt() {
         return createdAt;
     }
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Boolean getIsCachedIdempotentResponse() {
+        return isCachedIdempotentResponse;
+    }
+
+    public void setIsCachedIdempotentResponse(Boolean isCachedIdempotentResponse) {
+        this.isCachedIdempotentResponse = isCachedIdempotentResponse;
     }
 }

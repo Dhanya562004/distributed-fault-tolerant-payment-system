@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -88,6 +89,60 @@ class PaymentControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").value("IDEMPOTENCY_PAYLOAD_MISMATCH"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/payments should include Idempotent-Replayed: true header when response is cached")
+    void testInitiatePayment_CachedReplay_ReturnsIdempotentReplayedHeader() throws Exception {
+        InitiatePaymentRequest request = new InitiatePaymentRequest(
+                "IDEM_CTRL_REPLAY", "USR_ALICE", new BigDecimal("120.00"), "USD", "CREDIT_CARD", "Replay payment"
+        );
+
+        PaymentResponse response = new PaymentResponse();
+        response.setPaymentId("PAY_CTRL_101");
+        response.setIdempotencyKey("IDEM_CTRL_REPLAY");
+        response.setUserId("USR_ALICE");
+        response.setAmount(new BigDecimal("120.00"));
+        response.setStatus(PaymentStatus.SUCCESS);
+        response.setIsCachedIdempotentResponse(true);
+
+        when(paymentProcessingService.initiatePayment(any(InitiatePaymentRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Idempotency-Key", "IDEM_CTRL_REPLAY")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Idempotent-Replayed", "true"))
+                .andExpect(jsonPath("$.paymentId").value("PAY_CTRL_101"))
+                .andExpect(jsonPath("$.isCachedIdempotentResponse").value(true));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/payments should NOT include Idempotent-Replayed header on original payment execution")
+    void testInitiatePayment_OriginalExecution_DoesNotReturnReplayHeader() throws Exception {
+        InitiatePaymentRequest request = new InitiatePaymentRequest(
+                "IDEM_CTRL_ORIG", "USR_ALICE", new BigDecimal("120.00"), "USD", "CREDIT_CARD", "Original payment"
+        );
+
+        PaymentResponse response = new PaymentResponse();
+        response.setPaymentId("PAY_CTRL_102");
+        response.setIdempotencyKey("IDEM_CTRL_ORIG");
+        response.setUserId("USR_ALICE");
+        response.setAmount(new BigDecimal("120.00"));
+        response.setStatus(PaymentStatus.SUCCESS);
+        response.setIsCachedIdempotentResponse(false);
+
+        when(paymentProcessingService.initiatePayment(any(InitiatePaymentRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Idempotency-Key", "IDEM_CTRL_ORIG")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(header().doesNotExist("Idempotent-Replayed"))
+                .andExpect(jsonPath("$.paymentId").value("PAY_CTRL_102"))
+                .andExpect(jsonPath("$.isCachedIdempotentResponse").value(false));
     }
 
     @Test

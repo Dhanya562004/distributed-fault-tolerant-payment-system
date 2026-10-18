@@ -63,7 +63,9 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
         if (cachedOpt.isPresent()) {
             IdempotencyKeyRecord record = cachedOpt.get();
             try {
-                return objectMapper.readValue(record.getResponseBody(), RefundResponse.class);
+                RefundResponse response = objectMapper.readValue(record.getResponseBody(), RefundResponse.class);
+                response.setIsCachedIdempotentResponse(true);
+                return response;
             } catch (Exception e) {
                 logger.error("Failed parsing cached refund response JSON for key: {}", request.getIdempotencyKey(), e);
             }

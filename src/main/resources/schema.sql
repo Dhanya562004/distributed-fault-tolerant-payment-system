@@ -49,10 +49,12 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     response_body TEXT,
     http_status_code INT,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_idempotency_key_value ON idempotency_keys(key_value);
+CREATE INDEX IF NOT EXISTS idx_idempotency_expires_at ON idempotency_keys(expires_at);
 
 -- 4. Refund Transactions Table
 CREATE TABLE IF NOT EXISTS refunds (

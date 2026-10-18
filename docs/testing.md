@@ -2,26 +2,26 @@
 
 **System**: Distributed Fault-Tolerant Payment System  
 **Test Suite**: JUnit 5 + Mockito + Spring Boot Test + MockMvc + PostgreSQL 16 Testcontainers  
-**Execution Status**: **31 Tests Passing (100% Success Rate)**  
-- Fast H2 In-Memory Suite: 20 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
-- PostgreSQL 16 Testcontainers Suite: 11 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
-**CI/CD Pipeline**: GitHub Actions Run [`39121811229`](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system/actions/runs/39121811229) (All 3 Stages: Fast Tests, PostgreSQL 16 Suite, Packaging & Dashboard Verified)  
+**Execution Status**: **51 Tests Passing (100% Success Rate)**  
+- Fast H2 In-Memory Suite: 38 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
+- PostgreSQL 16 Testcontainers Suite: 13 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
+**CI/CD Pipeline**: GitHub Actions (All 3 Stages: Fast Tests, PostgreSQL 16 Suite, Packaging & Dashboard Verified)  
 **Target Role**: Standard Chartered Development Engineer (Band 8)  
 
 ---
 
 ## 1. Testing Philosophy & Pyramid
 
-Financial systems require uncompromising verification standards. Our testing methodology emphasizes high-concurrency invariants, boundary state transitions, and fault tolerance recovery:
+Financial systems require uncompromising verification standards. Our testing methodology emphasizes high-concurrency invariants, boundary state transitions, 24-hour retention expiry, and fault tolerance recovery:
 
 ```mermaid
-pie title Test Suite Distribution
-    "Concurrency & Stress Tests" : 2
-    "End-to-End Integration Tests" : 1
-    "PostgreSQL 16 Locking & Idempotency" : 10
-    "Core Service Unit Tests" : 11
-    "REST Controller MockMvc Tests" : 6
-    "Fault Tolerance Retry Tests" : 1
+pie title Test Suite Distribution (51 Tests Total)
+    "Idempotency Expiry & Replay Tests" : 11
+    "PostgreSQL 16 Locking & Idempotency" : 13
+    "REST Controller MockMvc Tests" : 10
+    "Core Service Unit Tests" : 14
+    "High-Concurrency Stress Benchmarks" : 2
+    "Fault Tolerance & E2E Tests" : 2
 ```
 
 ---
@@ -31,8 +31,8 @@ pie title Test Suite Distribution
 ### Local Fast Execution (Docker-Free)
 Running `mvn clean test` across the complete project locally on any developer machine (including Windows without Docker Desktop) produces:
 
-- **Total Tests Executed**: 20
-- **Passed**: 20
+- **Total Tests Executed**: 38
+- **Passed**: 38
 - **Failures**: 0
 - **Errors**: 0
 - **Skipped**: 0
@@ -40,10 +40,10 @@ Running `mvn clean test` across the complete project locally on any developer ma
 
 ### Dual-Stage GitHub Actions Execution (CI/CD)
 On GitHub Actions Ubuntu runners, both test suites are executed in strict isolation:
-- **Stage A (Fast H2 Suite)**: `mvn clean test -B` (20 passed)
-- **Stage B (PostgreSQL 16 Suite)**: `mvn test -Ppostgres-it -B` (11 passed)
+- **Stage A (Fast H2 Suite)**: `mvn clean test -B` (38 passed)
+- **Stage B (PostgreSQL 16 Suite)**: `mvn test -Ppostgres-it -B` (13 passed)
 - **Stage C (Packaging & Dashboard)**: JAR packaged and Streamlit validated
-- **Overall Result**: **31 Tests Run, 31 Passed, 0 Failures, 0 Errors**
+- **Overall Result**: **51 Tests Run, 51 Passed, 0 Failures, 0 Errors**
 
 ---
 
@@ -51,15 +51,16 @@ On GitHub Actions Ubuntu runners, both test suites are executed in strict isolat
 
 | Test Suite Class | Type | Tests | Key Capabilities Verified |
 | :--- | :--- | :-: | :--- |
+| `IdempotencyExpiryAndReplayTest` | Integration / SpringBootTest | 11 | 1. New key creates payment.<br>2. Duplicate request within 24h replays response.<br>3. Cached replay returns `Idempotent-Replayed: true`.<br>4. Fresh execution does not return replay header.<br>5. Payload mismatch on unexpired key rejected with 409.<br>6. Key expires exactly at configured 24h boundary.<br>7. Expired key can be reused for new payment.<br>8. Concurrent requests reusing expired key prevent double charges.<br>9. Expired-key cleanup preserves payment audit history.<br>10. Refund duplicate replay includes `Idempotent-Replayed: true`.<br>11. Concurrent duplicate requests returning 409 do not return replay header. |
+| `PaymentControllerTest` | Spring MVC MockMvc | 5 | 1. `POST /api/v1/payments` returns 201 CREATED for sync payment.<br>2. Returns 409 CONFLICT on payload mismatch.<br>3. Returns `Idempotent-Replayed: true` header on cached payment.<br>4. Excludes replay header on original payment execution.<br>5. Supports pagination parameters (`page`, `size`). |
+| `RefundControllerTest` | Spring MVC MockMvc | 5 | 1. `POST /api/v1/refunds` returns 201 CREATED.<br>2. Returns 422 UNPROCESSABLE_ENTITY on invalid state transition.<br>3. Returns `Idempotent-Replayed: true` header on cached refund.<br>4. Excludes replay header on original refund execution.<br>5. `GET /api/v1/refunds/{id}` returns 200 OK. |
+| `IdempotencyServiceTest` | Unit / Mockito | 7 | 1. New key acquisition lock.<br>2. Concurrent in-progress request conflict.<br>3. Cached response return on identical replay.<br>4. Reused key with payload mismatch rejection (`PayloadMismatchException`).<br>5. Atomic acquisition of expired key via `updateIfExpired`.<br>6. Expired key race condition detection (IN_PROGRESS -> 409).<br>7. Purge of expired keys excluding IN_PROGRESS records. |
 | `ConcurrentPaymentTest` | High-Concurrency Stress Benchmark | 1 | 1,000 concurrent duplicate requests across 3 isolated runs; bounded 50-worker pool; verifies exactly 1 charge processed, cached replays, 409 conflict handling, zero double-spending, and detailed p50/p95/p99 latency metrics. |
 | `FaultToleranceRetryTest` | Fault Simulation | 1 | Injected gateway socket read timeouts; validates exponential backoff with jitter and successful recovery on subsequent attempt. |
-| `IdempotencyServiceTest` | Unit / Mockito | 4 | 1. New key acquisition lock.<br>2. Concurrent in-progress request conflict.<br>3. Cached response return on identical replay.<br>4. Reused key with payload mismatch rejection (`PayloadMismatchException`). |
 | `PaymentProcessingServiceTest` | Unit / Mockito | 3 | 1. Sufficient balance payment authorization.<br>2. Insufficient balance fail-fast check (`InsufficientBalanceException` with 0 retries).<br>3. Collection pagination (`page`, `size`). |
 | `RefundProcessingServiceTest` | Unit / Mockito | 4 | 1. Valid partial refund and balance restoration.<br>2. Rejection of refund on FAILED payments.<br>3. Prevention of cumulative refunds exceeding transaction amount.<br>4. Cached response on duplicate refund idempotency key. |
-| `PaymentControllerTest` | Spring MVC MockMvc | 3 | 1. `POST /api/v1/payments` returns 201 CREATED for sync payment.<br>2. Returns 409 CONFLICT on payload mismatch.<br>3. Supports pagination parameters (`page`, `size`). |
-| `RefundControllerTest` | Spring MVC MockMvc | 3 | 1. `POST /api/v1/refunds` returns 201 CREATED.<br>2. Returns 422 UNPROCESSABLE_ENTITY on invalid state transition.<br>3. `GET /api/v1/refunds/{id}` returns 200 OK. |
-| `PaymentLifecycleIntegrationTest` | E2E Integration | 1 | Complete banking lifecycle: User creation -> Sync payment -> Idempotent replay -> Payload mismatch -> Input validation -> Payment retrieval -> Valid refund -> Over-refund rejection -> Audit trail verification. |
-| `PostgreSqlIdempotencyTest` | Real PostgreSQL 16 Integration | 5 | Validates idempotency key acquisition, in-progress 409 conflict, cached replay without double-charge, payload mismatch rejection, and concurrent duplicate prevention against real PostgreSQL 16. |
+| `PaymentLifecycleIntegrationTest` | E2E Integration | 1 | Complete banking lifecycle: User creation -> Sync payment -> Idempotent replay with header -> Payload mismatch -> Input validation -> Payment retrieval -> Valid refund -> Over-refund rejection -> Audit trail verification. |
+| `PostgreSqlIdempotencyTest` | Real PostgreSQL 16 Integration | 7 | 1. New key acquisition in PostgreSQL.<br>2. In-progress 409 conflict.<br>3. Cached replay without double deduction.<br>4. Payload mismatch rejection.<br>5. Concurrent duplicate prevention (1 charge, 0 double spend).<br>6. Expired key reuse creates new payment in PostgreSQL.<br>7. Concurrent expired-key reuse prevents double charges via row-level atomic locks. |
 | `PostgreSqlOptimisticLockingTest` | Concurrency / Locking | 3 | Validates JPA `@Version` on `User` and `PaymentTransaction`. Stale entity updates trigger genuine `OptimisticLockingFailureException` in PostgreSQL, preventing lost updates. |
 | `PostgreSqlPessimisticLockingTest` | Concurrency / Locking | 2 | Validates `@Lock(LockModeType.PESSIMISTIC_WRITE)` (`SELECT FOR UPDATE`). Proves PostgreSQL lock manager blocks competing transactions until the lock holder commits. |
 | `PostgreSqlConcurrencyStressTest` | High-Concurrency Stress Benchmark | 1 | 1,000 duplicate requests across 50 worker threads and 3 isolated runs against PostgreSQL 16, measuring latency percentiles (p50, p95, p99) and single-charge database persistence. |
@@ -153,3 +154,33 @@ To bridge the fidelity gap between in-memory H2 and production PostgreSQL, ApexP
 - Once Transaction A updates the balance and commits, PostgreSQL releases the lock.
 - Transaction B immediately unblocks, reads Transaction A's committed balance, and applies its update sequentially.
 - Final user balance confirms strict serialization and zero lost updates.
+
+### 4.7 24-Hour Idempotency Expiry, Retention Period & Replay Header Verification
+
+Step 3 introduces temporal lifecycle management for idempotency tokens, verified via deterministic automated tests:
+
+#### 1. Configurable Retention Period & Database Persistence
+- Configured via `app.idempotency.retention-hours: 24` (defaults to 24 hours).
+- Persisted directly in `idempotency_keys` table via `created_at` and `expires_at` timestamp columns (UTC server-side time).
+- Backed by index `idx_idempotency_expires_at` for high-performance expiry querying.
+
+#### 2. Deterministic Testing with Injectable `Clock`
+- Uses `com.paymentsystem.config.TimeConfig` providing an injectable `java.time.Clock` bean.
+- Test suites (`IdempotencyExpiryAndReplayTest`) utilize a thread-safe `MutableClock` to simulate precise time progression (e.g. advancing 12h, 23h 59m 59s, 24h, 25h) without error-prone `Thread.sleep`.
+
+#### 3. `Idempotent-Replayed: true` Response Header
+- When a payment or refund request is served from the completed idempotency cache within the retention window, the controller sets the HTTP response header:
+  `Idempotent-Replayed: true`
+- Fresh executions (first-time payment authorizations) do NOT include this header.
+- Rejection responses (HTTP 409 Conflict for payload mismatch or in-flight duplicate) do NOT include this header.
+
+#### 4. Atomic Concurrency-Safe Expired-Key Reuse
+- Once a key passes its exact 24-hour expiry boundary ($T_0 + 24\text{h}$), it is eligible for reuse.
+- `IdempotencyServiceImpl.acquireExpiredKey` executes an atomic database operation:
+  `UPDATE IdempotencyKeyRecord i SET i.status = :newStatus, i.requestHash = :requestHash, i.responseBody = NULL, i.httpStatusCode = NULL, i.createdAt = :now, i.updatedAt = :now, i.expiresAt = :newExpiresAt WHERE i.keyValue = :keyValue AND i.expiresAt <= :now`
+- Under PostgreSQL, row-level locking ensures only ONE thread can acquire and reuse the expired key. Competing concurrent threads observe the updated `IN_PROGRESS` state and are rejected with HTTP 409, preventing double-charging.
+- Verified under high concurrency with 20 parallel threads in `IdempotencyExpiryAndReplayTest.test8_ConcurrentRequestsReusingExpiredKeyCannotDoubleCharge` and 15 threads in `PostgreSqlIdempotencyTest.testPostgreSqlConcurrentExpiredKeyReuse_PreventsDoubleCharge`.
+
+#### 5. Audit & Transaction History Preservation
+- The background scheduled task (`cleanupExpiredKeys`) purges expired records from `idempotency_keys` while strictly excluding active (`IN_PROGRESS`) transactions.
+- Historical `PaymentTransaction` records and immutable NoSQL/MongoDB `audit_logs` are never deleted, ensuring an unbroken financial audit trail.

@@ -111,4 +111,64 @@ class IdempotencyServiceTest {
 
         verify(metricsService, times(1)).recordIdempotencyHit();
     }
+
+    @Test
+    @DisplayName("Should atomically acquire expired key when updateIfExpired returns 1")
+    void testTryAcquire_ExpiredKey_AtomicUpdate_Success() {
+        String key = "IDEM_KEY_EXPIRED";
+        InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", new BigDecimal("200.00"), "USD", "CREDIT_CARD", "Reused expired key");
+
+        IdempotencyKeyRecord expiredRecord = new IdempotencyKeyRecord(key, "old_hash");
+        expiredRecord.setStatus(IdempotencyKeyRecord.Status.COMPLETED);
+        expiredRecord.setExpiresAt(java.time.Instant.now().minus(java.time.Duration.ofHours(2)));
+
+        when(idempotencyKeyRepository.findByKeyValue(key)).thenReturn(Optional.of(expiredRecord));
+        when(idempotencyKeyRepository.updateIfExpired(eq(key), anyString(), any(), any(), eq(IdempotencyKeyRecord.Status.IN_PROGRESS)))
+                .thenReturn(1);
+
+        Optional<IdempotencyKeyRecord> result = idempotencyService.tryAcquireOrGet(key, request);
+
+        assertTrue(result.isEmpty(), "Successful atomic acquisition must return empty to permit execution");
+        verify(idempotencyKeyRepository, times(1)).updateIfExpired(eq(key), anyString(), any(), any(), eq(IdempotencyKeyRecord.Status.IN_PROGRESS));
+    }
+
+    @Test
+    @DisplayName("Should throw DuplicateRequestException when expired key update race is lost and key is IN_PROGRESS")
+    void testTryAcquire_ExpiredKey_UpdateLost_ThrowsDuplicateException() {
+        String key = "IDEM_KEY_EXPIRED_RACE";
+        InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", new BigDecimal("200.00"), "USD", "CREDIT_CARD", "Race on expired key");
+        String hash = idempotencyService.computePayloadHash(request);
+
+        IdempotencyKeyRecord expiredRecord = new IdempotencyKeyRecord(key, hash);
+        expiredRecord.setStatus(IdempotencyKeyRecord.Status.COMPLETED);
+        expiredRecord.setExpiresAt(java.time.Instant.now().minus(java.time.Duration.ofHours(2)));
+
+        IdempotencyKeyRecord inProgressByWinner = new IdempotencyKeyRecord(key, hash);
+        inProgressByWinner.setStatus(IdempotencyKeyRecord.Status.IN_PROGRESS);
+
+        when(idempotencyKeyRepository.findByKeyValue(key))
+                .thenReturn(Optional.of(expiredRecord))
+                .thenReturn(Optional.of(inProgressByWinner));
+        when(idempotencyKeyRepository.updateIfExpired(eq(key), anyString(), any(), any(), eq(IdempotencyKeyRecord.Status.IN_PROGRESS)))
+                .thenReturn(0);
+
+        assertThrows(DuplicateRequestException.class, () -> {
+            idempotencyService.tryAcquireOrGet(key, request);
+        });
+
+        verify(metricsService, times(1)).recordIdempotencyHit();
+    }
+
+    @Test
+    @DisplayName("Should call repository to delete expired keys excluding IN_PROGRESS status")
+    void testCleanupExpiredKeys() {
+        java.time.Instant now = java.time.Instant.now();
+        when(idempotencyKeyRepository.deleteExpiredKeysExcludingStatus(any(), eq(IdempotencyKeyRecord.Status.IN_PROGRESS)))
+                .thenReturn(5);
+
+        int deleted = idempotencyService.cleanupExpiredKeys(now);
+
+        assertEquals(5, deleted);
+        verify(idempotencyKeyRepository, times(1)).deleteExpiredKeysExcludingStatus(now, IdempotencyKeyRecord.Status.IN_PROGRESS);
+    }
 }

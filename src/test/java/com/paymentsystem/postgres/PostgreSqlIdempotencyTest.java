@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -255,5 +257,130 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
         IdempotencyKeyRecord record = idempotencyKeyRepository.findByKeyValue(idempotencyKey).orElseThrow();
         assertEquals(IdempotencyKeyRecord.Status.COMPLETED, record.getStatus());
         assertEquals(200, record.getHttpStatusCode());
+    }
+
+    @Test
+    @DisplayName("PostgreSQL: Expired key can be reused to create a brand new payment")
+    void testPostgreSqlExpiredKeyReuse_AllowsNewPayment() {
+        String userCode = "USR_PG_EXP_" + UUID.randomUUID().toString().substring(0, 8);
+        String idempotencyKey = "IDEM_PG_EXP_" + System.nanoTime();
+
+        userRepository.save(new User(userCode, "PG Expiry User", "pgexp@apexpay.com", new BigDecimal("1000.00")));
+
+        // 1. Initial Payment
+        InitiatePaymentRequest req1 = new InitiatePaymentRequest(
+                idempotencyKey, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Initial PG charge"
+        );
+        PaymentResponse resp1 = paymentProcessingService.initiatePayment(req1);
+        assertNotNull(resp1.getPaymentId());
+        assertEquals(PaymentStatus.SUCCESS, resp1.getStatus());
+
+        // 2. Mark key as expired in PostgreSQL (simulate expiry after 24h retention period)
+        IdempotencyKeyRecord record = idempotencyKeyRepository.findByKeyValue(idempotencyKey).orElseThrow();
+        record.setExpiresAt(Instant.now().minus(Duration.ofHours(1)));
+        idempotencyKeyRepository.saveAndFlush(record);
+
+        // 3. Reuse the expired key with a new payment request
+        InitiatePaymentRequest req2 = new InitiatePaymentRequest(
+                idempotencyKey, userCode, new BigDecimal("250.00"), "USD", "CREDIT_CARD", "Subsequent PG charge after expiry"
+        );
+        PaymentResponse resp2 = paymentProcessingService.initiatePayment(req2);
+
+        assertNotNull(resp2.getPaymentId());
+        assertEquals(PaymentStatus.SUCCESS, resp2.getStatus());
+        assertNotEquals(resp1.getPaymentId(), resp2.getPaymentId(), "New payment ID must be assigned");
+        assertFalse(Boolean.TRUE.equals(resp2.getIsCachedIdempotentResponse()), "Fresh execution must not be marked as cached");
+
+        // Verify balance in PostgreSQL: $1000 - $100 - $250 = $650
+        User finalUser = userRepository.findByUserCode(userCode).orElseThrow();
+        assertEquals(0, new BigDecimal("650.0000").compareTo(finalUser.getBalance()));
+
+        // Exactly 2 transactions exist in PostgreSQL
+        List<PaymentTransaction> txs = paymentTransactionRepository.findAll().stream()
+                .filter(t -> idempotencyKey.equals(t.getIdempotencyKey()))
+                .toList();
+        assertEquals(2, txs.size(), "Both payments must be persisted in PostgreSQL");
+    }
+
+    @Test
+    @DisplayName("PostgreSQL: Concurrent requests reusing expired key prevent double charges via SELECT FOR UPDATE")
+    void testPostgreSqlConcurrentExpiredKeyReuse_PreventsDoubleCharge() throws Exception {
+        String userCode = "USR_PG_CEXP_" + UUID.randomUUID().toString().substring(0, 8);
+        String idempotencyKey = "IDEM_PG_CEXP_" + System.nanoTime();
+
+        userRepository.save(new User(userCode, "PG Concur Expiry User", "pgcexp@apexpay.com", new BigDecimal("1000.00")));
+
+        // 1. Initial payment
+        InitiatePaymentRequest initialReq = new InitiatePaymentRequest(
+                idempotencyKey, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Day 1 payment"
+        );
+        PaymentResponse initialResp = paymentProcessingService.initiatePayment(initialReq);
+        assertNotNull(initialResp.getPaymentId());
+
+        // 2. Mark key as expired in PostgreSQL
+        IdempotencyKeyRecord record = idempotencyKeyRepository.findByKeyValue(idempotencyKey).orElseThrow();
+        record.setExpiresAt(Instant.now().minus(Duration.ofHours(1)));
+        idempotencyKeyRepository.saveAndFlush(record);
+
+        // 3. Launch 15 concurrent threads in PostgreSQL attempting to reuse the expired key
+        int threads = 15;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        CountDownLatch readyLatch = new CountDownLatch(threads);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch finishLatch = new CountDownLatch(threads);
+
+        AtomicInteger originalCharges = new AtomicInteger(0);
+        AtomicInteger cachedReplays = new AtomicInteger(0);
+        AtomicInteger duplicateConflicts = new AtomicInteger(0);
+        AtomicInteger unexpectedFailures = new AtomicInteger(0);
+
+        InitiatePaymentRequest reuseReq = new InitiatePaymentRequest(
+                idempotencyKey, userCode, new BigDecimal("200.00"), "USD", "CREDIT_CARD", "Day 2 concurrent reuse"
+        );
+
+        for (int i = 0; i < threads; i++) {
+            executor.submit(() -> {
+                readyLatch.countDown();
+                try {
+                    startLatch.await();
+                    PaymentResponse resp = paymentProcessingService.initiatePayment(reuseReq);
+                    if (resp != null && resp.getStatus() == PaymentStatus.SUCCESS) {
+                        if (Boolean.TRUE.equals(resp.getIsCachedIdempotentResponse())) {
+                            cachedReplays.incrementAndGet();
+                        } else {
+                            originalCharges.incrementAndGet();
+                        }
+                    } else {
+                        unexpectedFailures.incrementAndGet();
+                    }
+                } catch (DuplicateRequestException e) {
+                    duplicateConflicts.incrementAndGet();
+                } catch (Exception e) {
+                    unexpectedFailures.incrementAndGet();
+                } finally {
+                    finishLatch.countDown();
+                }
+            });
+        }
+
+        readyLatch.await(5, TimeUnit.SECONDS);
+        startLatch.countDown();
+        boolean completed = finishLatch.await(15, TimeUnit.SECONDS);
+        executor.shutdown();
+
+        assertTrue(completed);
+        assertEquals(1, originalCharges.get(), "Exactly ONE original charge must succeed when reusing expired key in PostgreSQL");
+        assertEquals(0, unexpectedFailures.get(), "Zero unexpected failures allowed");
+        assertEquals(threads, originalCharges.get() + cachedReplays.get() + duplicateConflicts.get());
+
+        // Initial $100 + Reused $200 = $300 deducted. Final balance in PostgreSQL: $700
+        User finalUser = userRepository.findByUserCode(userCode).orElseThrow();
+        assertEquals(0, new BigDecimal("700.0000").compareTo(finalUser.getBalance()));
+
+        // Exactly 2 transactions exist for this key in PostgreSQL
+        List<PaymentTransaction> txs = paymentTransactionRepository.findAll().stream()
+                .filter(t -> idempotencyKey.equals(t.getIdempotencyKey()))
+                .toList();
+        assertEquals(2, txs.size(), "PostgreSQL must contain exactly 2 transaction records");
     }
 }

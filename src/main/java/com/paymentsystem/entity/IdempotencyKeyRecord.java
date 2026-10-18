@@ -41,25 +41,45 @@ public class IdempotencyKeyRecord {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "expires_at", nullable = false)
+    private Instant expiresAt;
+
     public IdempotencyKeyRecord() {
     }
 
     public IdempotencyKeyRecord(String keyValue, String requestHash) {
+        this(keyValue, requestHash, Instant.now(), Instant.now().plus(24, java.time.temporal.ChronoUnit.HOURS));
+    }
+
+    public IdempotencyKeyRecord(String keyValue, String requestHash, Instant createdAt, Instant expiresAt) {
         this.keyValue = keyValue;
         this.requestHash = requestHash;
         this.status = Status.IN_PROGRESS;
+        this.createdAt = createdAt;
+        this.updatedAt = createdAt;
+        this.expiresAt = expiresAt;
     }
 
     @PrePersist
     protected void onCreate() {
-        Instant now = Instant.now();
+        Instant now = (this.createdAt != null) ? this.createdAt : Instant.now();
         this.createdAt = now;
         this.updatedAt = now;
+        if (this.expiresAt == null) {
+            this.expiresAt = now.plus(24, java.time.temporal.ChronoUnit.HOURS);
+        }
     }
 
     @PreUpdate
     protected void onUpdate() {
-        this.updatedAt = Instant.now();
+        this.updatedAt = (this.updatedAt != null) ? this.updatedAt : Instant.now();
+    }
+
+    public boolean isExpired(Instant currentUtcInstant) {
+        if (this.expiresAt == null) {
+            return false;
+        }
+        return !currentUtcInstant.isBefore(this.expiresAt);
     }
 
     public Long getId() {
@@ -124,5 +144,13 @@ public class IdempotencyKeyRecord {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(Instant expiresAt) {
+        this.expiresAt = expiresAt;
     }
 }

@@ -2,6 +2,7 @@ package com.paymentsystem.service;
 
 import com.paymentsystem.entity.IdempotencyKeyRecord;
 
+import java.time.Instant;
 import java.util.Optional;
 
 public interface IdempotencyService {
@@ -9,4 +10,7 @@ public interface IdempotencyService {
     Optional<IdempotencyKeyRecord> tryAcquireOrGet(String keyValue, Object payload);
     void markCompleted(String keyValue, Object responseObj, int httpStatusCode);
     void markFailed(String keyValue, String errorMessage);
+    int cleanupExpiredKeys();
+    int cleanupExpiredKeys(Instant now);
+    long getRetentionHours();
 }

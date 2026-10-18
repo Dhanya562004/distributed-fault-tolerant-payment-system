@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -60,6 +61,7 @@ public class PaymentLifecycleIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payReq)))
                 .andExpect(status().isCreated())
+                .andExpect(header().doesNotExist("Idempotent-Replayed"))
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.isCachedIdempotentResponse").value(false))
                 .andReturn();
@@ -73,6 +75,7 @@ public class PaymentLifecycleIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payReq)))
                 .andExpect(status().isCreated())
+                .andExpect(header().string("Idempotent-Replayed", "true"))
                 .andExpect(jsonPath("$.paymentId").value(payment.getPaymentId()))
                 .andExpect(jsonPath("$.isCachedIdempotentResponse").value(true));
 
