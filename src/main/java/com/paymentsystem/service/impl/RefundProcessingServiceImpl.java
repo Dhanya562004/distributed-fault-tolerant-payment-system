@@ -84,7 +84,8 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
             }
         }
 
-        PaymentTransaction payment = paymentRepository.findByPaymentId(request.getPaymentId())
+        PaymentTransaction payment = paymentRepository.findByPaymentIdForUpdate(request.getPaymentId())
+                .or(() -> paymentRepository.findByPaymentId(request.getPaymentId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Payment transaction not found for ID: " + request.getPaymentId()));
 
         if (payment.getStatus() != PaymentStatus.SUCCESS && payment.getStatus() != PaymentStatus.REFUNDED) {
@@ -117,7 +118,8 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
         payment.setStatus(PaymentStatus.REFUNDED);
         paymentRepository.save(payment);
 
-        Optional<User> userOpt = userRepository.findByUserCode(payment.getUserId());
+        Optional<User> userOpt = userRepository.findByUserCodeForUpdate(payment.getUserId())
+                .or(() -> userRepository.findByUserCode(payment.getUserId()));
         userOpt.ifPresent(user -> {
             user.setBalance(user.getBalance().add(request.getAmount()));
             userRepository.save(user);

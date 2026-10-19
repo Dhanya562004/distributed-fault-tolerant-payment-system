@@ -185,6 +185,10 @@ public class OutboxDeliveryWorker {
             return false;
         }
 
+        if (event.getLeaseOwner() == null) {
+            event.setLeaseOwner(workerId);
+        }
+
         logger.info("[OUTBOX CLAIM] Worker {} claimed event {} (status: PROCESSING, lease until: {})",
                 workerId, event.getEventId(), lockedUntil);
 
@@ -203,6 +207,20 @@ public class OutboxDeliveryWorker {
         Runnable updateAction = () -> {
             OutboxEvent event = outboxEventRepository.findById(eventTableId).orElse(null);
             if (event == null) {
+                return;
+            }
+
+            // Guard against stale worker overwrite after lease loss:
+            // 1. If event is already DELIVERED by another worker, do not overwrite terminal success.
+            if (event.getStatus() == OutboxStatus.DELIVERED) {
+                logger.info("[OUTBOX LEASE] Event {} is already marked DELIVERED by another worker, skipping duplicate update", event.getEventId());
+                return;
+            }
+
+            // 2. If lease owner has changed to another worker, this worker has lost its lease; discard stale result.
+            if (event.getLeaseOwner() != null && !workerId.equals(event.getLeaseOwner())) {
+                logger.warn("[OUTBOX STALE WORKER] Worker {} lost lease for event {} (current lease owner: {}). Discarding stale delivery result.",
+                        workerId, event.getEventId(), event.getLeaseOwner());
                 return;
             }
 

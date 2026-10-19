@@ -246,4 +246,36 @@ class OutboxDeliveryWorkerTest {
         assertEquals(1, processed);
         assertEquals(OutboxStatus.DELIVERED, event.getStatus());
     }
+
+    @Test
+    @DisplayName("Stale worker does not overwrite event state if another worker claimed lease")
+    void testStaleWorker_DoesNotOverwrite_WhenLeaseLost() {
+        OutboxEvent event = createSampleEvent(10L, "evt_stale_lease", 0, 5);
+        event.setStatus(OutboxStatus.PROCESSING);
+        event.setLeaseOwner("other-worker-999"); // Another worker acquired the lease after expiry
+
+        when(outboxEventRepository.findById(10L)).thenReturn(Optional.of(event));
+
+        worker.recordDeliveryResult(10L, DeliveryResult.retryableFailure(500, "Transient 500 error"));
+
+        // Verify the stale worker's failure did NOT overwrite the active worker's lease
+        assertEquals("other-worker-999", event.getLeaseOwner());
+        assertEquals(OutboxStatus.PROCESSING, event.getStatus());
+        verify(outboxEventRepository, never()).save(event);
+    }
+
+    @Test
+    @DisplayName("Stale worker does not overwrite event state if already marked DELIVERED")
+    void testStaleWorker_DoesNotOverwrite_WhenAlreadyDelivered() {
+        OutboxEvent event = createSampleEvent(11L, "evt_already_delivered", 1, 5);
+        event.setStatus(OutboxStatus.DELIVERED);
+        event.setDeliveredAt(clock.instant());
+
+        when(outboxEventRepository.findById(11L)).thenReturn(Optional.of(event));
+
+        worker.recordDeliveryResult(11L, DeliveryResult.retryableFailure(500, "Delayed error"));
+
+        assertEquals(OutboxStatus.DELIVERED, event.getStatus());
+        verify(outboxEventRepository, never()).save(event);
+    }
 }

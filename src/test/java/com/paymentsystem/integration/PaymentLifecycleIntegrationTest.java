@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentsystem.dto.request.CreateUserRequest;
 import com.paymentsystem.dto.request.InitiatePaymentRequest;
 import com.paymentsystem.dto.request.ProcessRefundRequest;
+import com.paymentsystem.dto.request.SimulationConfigRequest;
 import com.paymentsystem.dto.response.PaymentResponse;
 import com.paymentsystem.dto.response.RefundResponse;
+import com.paymentsystem.dto.response.UserResponse;
 import com.paymentsystem.entity.PaymentStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -136,5 +138,52 @@ public class PaymentLifecycleIntegrationTest {
         // 9. Query Audit Logs
         mockMvc.perform(get("/api/v1/audit/logs"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Transaction Rollback: Gateway failure rolls back balance deduction completely")
+    void testFailedPayment_RollsBackBalanceDeduction() throws Exception {
+        String userCode = "USR_ROLLBACK_" + System.currentTimeMillis();
+        String idempotencyKey = "IDEM_ROLLBACK_" + System.currentTimeMillis();
+
+        // 1. Create User with 500.00 balance
+        CreateUserRequest userReq = new CreateUserRequest(userCode, "Rollback Customer", userCode.toLowerCase() + "@test.com", new BigDecimal("500.00"));
+        mockMvc.perform(post("/api/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(userReq)))
+                .andExpect(status().isCreated());
+
+        // 2. Enable 100% gateway failures
+        SimulationConfigRequest simConfig = new SimulationConfigRequest();
+        simConfig.setEnableGatewayFailures(true);
+        simConfig.setFailureProbability(1.0);
+        mockMvc.perform(post("/api/v1/simulation/config")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(simConfig)))
+                .andExpect(status().isOk());
+
+        try {
+            // 3. Initiate payment of 100.00 (which will fail all retry attempts)
+            InitiatePaymentRequest payReq = new InitiatePaymentRequest(
+                    idempotencyKey, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Payment doomed to fail"
+            );
+            mockMvc.perform(post("/api/v1/payments")
+                            .header("X-Idempotency-Key", idempotencyKey)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(payReq)))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.status").value("FAILED"));
+
+            // 4. Verify user balance was NOT deducted or corrupted by failed retries
+            MvcResult userResult = mockMvc.perform(get("/api/v1/users/" + userCode))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            UserResponse userResp = objectMapper.readValue(userResult.getResponse().getContentAsString(), UserResponse.class);
+            assertEquals(0, new BigDecimal("500.00").compareTo(userResp.getBalance()),
+                    "User balance must remain 500.00 after failed payment attempts (no partial commits)");
+        } finally {
+            // Reset simulation config
+            mockMvc.perform(post("/api/v1/simulation/reset")).andExpect(status().isOk());
+        }
     }
 }

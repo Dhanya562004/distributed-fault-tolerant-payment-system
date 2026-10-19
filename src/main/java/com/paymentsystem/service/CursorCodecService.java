@@ -34,6 +34,7 @@ public class CursorCodecService {
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     private static final int MAX_CURSOR_LENGTH = 1024;
 
+    private static final String DEV_DEFAULT_SECRET = "apexpay_cursor_signing_secret_dev_2026";
     private final String signingSecret;
     private final ObjectMapper objectMapper;
 
@@ -41,9 +42,22 @@ public class CursorCodecService {
     public CursorCodecService(
             @Value("${app.pagination.signing-secret:apexpay_cursor_signing_secret_dev_2026}") String signingSecret,
             ObjectMapper objectMapper) {
-        this.signingSecret = (signingSecret != null && !signingSecret.trim().isEmpty())
-                ? signingSecret.trim()
-                : "apexpay_cursor_signing_secret_dev_2026";
+        if (signingSecret != null && !signingSecret.trim().isEmpty() && !DEV_DEFAULT_SECRET.equals(signingSecret.trim())) {
+            this.signingSecret = signingSecret.trim();
+        } else if (DEV_DEFAULT_SECRET.equals(signingSecret != null ? signingSecret.trim() : null)) {
+            logger.warn("[SECURITY NOTICE] Using development cursor signing secret. Configure app.pagination.signing-secret for production.");
+            this.signingSecret = DEV_DEFAULT_SECRET;
+        } else {
+            // Secret missing or empty: generate a secure ephemeral 256-bit secret to prevent fallback to known dev keys
+            byte[] randomBytes = new byte[32];
+            new java.security.SecureRandom().nextBytes(randomBytes);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : randomBytes) {
+                sb.append(String.format("%02x", b));
+            }
+            this.signingSecret = "ephemeral_" + sb.toString();
+            logger.warn("[SECURITY NOTICE] No cursor signing secret configured. Generated ephemeral runtime secret.");
+        }
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 

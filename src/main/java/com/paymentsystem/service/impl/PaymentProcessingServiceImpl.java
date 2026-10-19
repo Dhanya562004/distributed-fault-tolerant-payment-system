@@ -50,6 +50,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
     private final ObjectMapper objectMapper;
     private final PaymentTransactionCoordinator paymentCoordinator;
     private final PaymentPaginationService paginationService;
+    private final org.springframework.transaction.support.TransactionTemplate txTemplate;
 
     public PaymentProcessingServiceImpl(PaymentTransactionRepository paymentRepository,
                                         UserRepository userRepository,
@@ -60,7 +61,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                                         DistributedQueueManager queueManager,
                                         ObjectMapper objectMapper) {
         this(paymentRepository, userRepository, idempotencyService, gatewaySimulationService,
-                auditService, metricsService, queueManager, objectMapper, null, null);
+                auditService, metricsService, queueManager, objectMapper, null, null, null);
     }
 
     public PaymentProcessingServiceImpl(PaymentTransactionRepository paymentRepository,
@@ -73,7 +74,21 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                                         ObjectMapper objectMapper,
                                         PaymentTransactionCoordinator paymentCoordinator) {
         this(paymentRepository, userRepository, idempotencyService, gatewaySimulationService,
-                auditService, metricsService, queueManager, objectMapper, paymentCoordinator, null);
+                auditService, metricsService, queueManager, objectMapper, paymentCoordinator, null, null);
+    }
+
+    public PaymentProcessingServiceImpl(PaymentTransactionRepository paymentRepository,
+                                        UserRepository userRepository,
+                                        IdempotencyService idempotencyService,
+                                        GatewaySimulationService gatewaySimulationService,
+                                        AuditService auditService,
+                                        MetricsService metricsService,
+                                        DistributedQueueManager queueManager,
+                                        ObjectMapper objectMapper,
+                                        PaymentTransactionCoordinator paymentCoordinator,
+                                        PaymentPaginationService paginationService) {
+        this(paymentRepository, userRepository, idempotencyService, gatewaySimulationService,
+                auditService, metricsService, queueManager, objectMapper, paymentCoordinator, paginationService, null);
     }
 
     @Autowired
@@ -86,7 +101,8 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                                         DistributedQueueManager queueManager,
                                         ObjectMapper objectMapper,
                                         @Autowired(required = false) PaymentTransactionCoordinator paymentCoordinator,
-                                        @Autowired(required = false) PaymentPaginationService paginationService) {
+                                        @Autowired(required = false) PaymentPaginationService paginationService,
+                                        @Autowired(required = false) org.springframework.transaction.PlatformTransactionManager transactionManager) {
         this.paymentRepository = paymentRepository;
         this.userRepository = userRepository;
         this.idempotencyService = idempotencyService;
@@ -97,6 +113,18 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
         this.objectMapper = objectMapper;
         this.paymentCoordinator = paymentCoordinator;
         this.paginationService = paginationService;
+        this.txTemplate = transactionManager != null ? new org.springframework.transaction.support.TransactionTemplate(transactionManager) : null;
+    }
+
+    private void runInTransaction(Runnable action) {
+        if (txTemplate != null) {
+            txTemplate.execute(status -> {
+                action.run();
+                return null;
+            });
+        } else {
+            action.run();
+        }
     }
 
     @Override
@@ -196,7 +224,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                     backoffMs = Math.min((long) (backoffMs * 2.0 + (Math.random() * 200)), 8000);
                 }
 
-                executeSinglePaymentAttempt(tx, request);
+                runInTransaction(() -> executeSinglePaymentAttempt(tx, request));
                 success = true;
 
             } catch (NonRetryableException ex) {
@@ -268,7 +296,8 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
     public void executeSinglePaymentAttempt(PaymentTransaction tx, InitiatePaymentRequest request) {
         gatewaySimulationService.simulateDbInteraction(tx.getPaymentId());
 
-        Optional<User> userOpt = userRepository.findByUserCode(request.getUserId());
+        Optional<User> userOpt = userRepository.findByUserCodeForUpdate(request.getUserId())
+                .or(() -> userRepository.findByUserCode(request.getUserId()));
         if (userOpt.isPresent()) {
             User user = userOpt.get();
             if (user.getBalance().compareTo(request.getAmount()) < 0) {
@@ -287,7 +316,8 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
     @Override
     public boolean processWorkerMessage(EventMessage message, String workerId) {
         logger.info("[WORKER {}] Processing event {} for payment {}", workerId, message.getEventId(), message.getPaymentId());
-        Optional<PaymentTransaction> txOpt = paymentRepository.findByPaymentId(message.getPaymentId());
+        Optional<PaymentTransaction> txOpt = paymentRepository.findByPaymentIdForUpdate(message.getPaymentId())
+                .or(() -> paymentRepository.findByPaymentId(message.getPaymentId()));
         if (txOpt.isEmpty()) {
             logger.error("Worker could not find transaction record for paymentId: {}", message.getPaymentId());
             return false;
@@ -309,7 +339,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
         );
 
         try {
-            executeSinglePaymentAttempt(tx, req);
+            runInTransaction(() -> executeSinglePaymentAttempt(tx, req));
             if (paymentCoordinator != null) {
                 paymentCoordinator.commitPaymentSuccess(tx);
             } else {

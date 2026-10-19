@@ -22,7 +22,7 @@ In high-throughput financial transaction processing, traditional `OFFSET` / `LIM
 ApexPay solves these challenges through **Deterministic Keyset Pagination** using composite keys `(created_at DESC, id DESC)`:
 
 - **Zero OFFSET Execution**: Queries use strict bounding predicates `WHERE created_at < :cursorTime OR (created_at = :cursorTime AND id < :cursorId)`.
-- **$O(1)$ Indexed Page Fetching**: Navigates directly via composite B-tree index `idx_payments_created_at_id`.
+- **$O(\log N + K)$ Indexed Seek**: Navigates directly via composite B-tree index `idx_payments_created_at_id`, executing a logarithmic index seek ($O(\log N)$) followed by retrieving $K$ page records, completely eliminating $O(M)$ linear offset scans.
 - **Stable Windowing**: Newly inserted transactions with higher timestamps appear only on subsequent first-page requests and never distort in-progress pagination cursors.
 - **Cryptographic Cursor Integrity**: Cursors are opaque, URL-safe Base64-encoded, versioned (`v1`), filter-bound (SHA-256), and signed with server-side HMAC-SHA256 to eliminate client tampering.
 
@@ -37,9 +37,9 @@ Retrieves a chronologically ordered, keyset-paginated slice of payment transacti
 #### HTTP Headers
 | Header | Required | Type | Description |
 | :--- | :---: | :--- | :--- |
-| `X-Api-Key` | Conditional | String | Server administrative API key (configurable via `app.pagination.security.api-key`). |
+| `X-Api-Key` | Conditional | String | Server administrative API key (configurable via `app.pagination.security.api-key`). Platform-wide access. |
 | `Authorization` | Conditional | String | Bearer or raw authorization token: `Bearer <token>`. |
-| `X-Tenant-Id` | Optional | String | Tenant / Account scope identifier bound to cursor verification. |
+| `X-Tenant-Id` | Optional | String | Tenant / Account scope identifier bound to cursor verification. (Note: Acts as a cursor filter bind parameter; customer-level SQL scoping requires upstream identity token isolation). |
 
 #### Query Parameters
 | Parameter | Type | Required | Default | Bounds | Description |

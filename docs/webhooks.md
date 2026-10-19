@@ -219,6 +219,15 @@ Operators can trigger manual redelivery programmatically via `WebhookDeliverySer
 3. **No Database Transactions During HTTP Calls:**
    Database transactions are only opened for microseconds during claim and status updates. No connections are held during external HTTP requests.
 
+4. **Delivery Guarantee: AT-LEAST-ONCE Semantics & Receiver Deduplication:**
+   ApexPay guarantees **AT-LEAST-ONCE** HTTP delivery. In distributed systems, exactly-once delivery over network boundaries is provably impossible. Duplicate deliveries can occur under legitimate edge cases:
+   - **Transient Drops on ACK:** The receiver successfully processes the webhook and returns HTTP 200, but an intermediate network drop or timeout drops the response packet before ApexPay receives it. ApexPay classifies this as a network failure and re-attempts delivery.
+   - **Worker Lease Expiry on Slow Receivers:** If downstream merchant processing stalls for longer than the lease duration (60s), a surviving worker detects the expired lease and reclaims the event for re-dispatch.
+   - **Receiver Idempotency Requirement:** Webhook consumers **must implement receiver-side deduplication** keyed by `eventId` (available via the `X-ApexPay-Event-Id` header and `payload.eventId`). If a received `eventId` has already been processed, the merchant should immediately return HTTP 200 without executing duplicate business logic.
+
+5. **Stale Worker Lease Overwrite Protection:**
+   Before updating event status in the database, workers verify that `status != DELIVERED` and that the current worker still holds the lease (`leaseOwner == workerId`). If the lease expired and was claimed by another worker, the stale worker's result is safely discarded.
+
 ---
 
 ## SSRF Security Hardening

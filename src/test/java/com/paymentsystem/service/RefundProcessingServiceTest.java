@@ -154,4 +154,31 @@ class RefundProcessingServiceTest {
         assertEquals("REF_CACHED_001", actualResponse.getRefundId());
         verify(refundRepository, never()).save(any());
     }
+
+    @Test
+    @DisplayName("Pessimistic locking: processRefund invokes findByPaymentIdForUpdate and findByUserCodeForUpdate")
+    void testProcessRefund_UsesPessimisticLock() {
+        String paymentId = "PAY_PESS_99";
+        String userId = "USR_ALICE";
+        BigDecimal paymentAmount = new BigDecimal("100.00");
+        BigDecimal refundAmount = new BigDecimal("40.00");
+
+        PaymentTransaction payment = new PaymentTransaction(paymentId, "IDEM_PESS_99", userId, paymentAmount, "USD", "CREDIT_CARD", "Pessimistic Test");
+        payment.setStatus(PaymentStatus.SUCCESS);
+        User user = new User(userId, "Alice", "alice@example.com", new BigDecimal("200.00"));
+
+        ProcessRefundRequest request = new ProcessRefundRequest(paymentId, "IDEM_REF_PESS_99", refundAmount, "Locking test");
+
+        when(idempotencyService.tryAcquireOrGet(eq("IDEM_REF_PESS_99"), any())).thenReturn(Optional.empty());
+        when(paymentRepository.findByPaymentIdForUpdate(paymentId)).thenReturn(Optional.of(payment));
+        when(refundRepository.findByPaymentId(paymentId)).thenReturn(List.of());
+        when(userRepository.findByUserCodeForUpdate(userId)).thenReturn(Optional.of(user));
+
+        RefundResponse response = refundService.processRefund(request);
+
+        assertNotNull(response);
+        assertEquals(refundAmount, response.getAmount());
+        verify(paymentRepository, times(1)).findByPaymentIdForUpdate(paymentId);
+        verify(userRepository, times(1)).findByUserCodeForUpdate(userId);
+    }
 }

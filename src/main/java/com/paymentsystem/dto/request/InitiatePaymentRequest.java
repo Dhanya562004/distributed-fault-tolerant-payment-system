@@ -66,7 +66,11 @@ public class InitiatePaymentRequest {
     }
 
     public void setCurrency(String currency) {
-        this.currency = currency;
+        if (currency != null && !currency.trim().isEmpty()) {
+            this.currency = currency.trim().toUpperCase();
+        } else {
+            this.currency = "USD";
+        }
     }
 
     public String getPaymentMethod() {

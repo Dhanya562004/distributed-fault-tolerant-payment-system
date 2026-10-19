@@ -69,4 +69,27 @@ class WebhookSecurityValidatorTest {
         assertDoesNotThrow(() -> testValidator.validateUrl("http://localhost:8080/mock-webhook"));
         assertDoesNotThrow(() -> testValidator.validateUrl("http://127.0.0.1:8080/mock-webhook"));
     }
+
+    @Test
+    @DisplayName("Production: IPv4-mapped IPv6 loopback and metadata addresses are blocked")
+    void testValidateUrl_Ipv4MappedIpv6_Blocked() {
+        assertThrows(SecurityException.class, () -> prodValidator.validateUrl("https://[::ffff:127.0.0.1]:8443/webhook"));
+        assertThrows(SecurityException.class, () -> prodValidator.validateUrl("https://[::ffff:169.254.169.254]/latest/meta-data/"));
+        assertThrows(SecurityException.class, () -> prodValidator.validateUrl("https://[::ffff:10.0.0.1]/hook"));
+    }
+
+    @Test
+    @DisplayName("Production: IPv6 Unique Local Addresses (ULA fc00::/7) and Link-Local are blocked")
+    void testValidateUrl_Ipv6UlaAndLinkLocal_Blocked() {
+        assertThrows(SecurityException.class, () -> prodValidator.validateUrl("https://[fd00::1]/webhook"));
+        assertThrows(SecurityException.class, () -> prodValidator.validateUrl("https://[fc00::1234]/webhook"));
+        assertThrows(SecurityException.class, () -> prodValidator.validateUrl("https://[fe80::1]/webhook"));
+    }
+
+    @Test
+    @DisplayName("Production: Carrier-Grade NAT (100.64.0.0/10) is blocked")
+    void testValidateUrl_CarrierGradeNat_Blocked() {
+        assertThrows(SecurityException.class, () -> prodValidator.validateUrl("https://100.64.0.1/hook"));
+        assertThrows(SecurityException.class, () -> prodValidator.validateUrl("https://100.127.255.254/hook"));
+    }
 }

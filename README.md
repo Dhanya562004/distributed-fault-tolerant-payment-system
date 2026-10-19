@@ -10,7 +10,7 @@
 [![Spring Boot 3.3.4](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F.svg?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
 [![Docker Container](https://img.shields.io/badge/Docker-Multi--Stage%20Container-2496ED.svg?style=flat-square&logo=docker)](Dockerfile)
 [![Polyglot Persistence](https://img.shields.io/badge/Storage-PostgreSQL%20%7C%20MongoDB%20%7C%20H2-336791.svg?style=flat-square&logo=postgresql)](docs/architecture.md)
-[![Automated Tests](https://img.shields.io/badge/Tests-146%20Total%20(100%25)-10B981.svg?style=flat-square&logo=checkmarx)](docs/testing.md)
+[![Automated Tests](https://img.shields.io/badge/Tests-153%20Total%20(100%25)-10B981.svg?style=flat-square&logo=checkmarx)](docs/testing.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 
 <p align="center">
@@ -230,7 +230,7 @@ This provisions:
 
 The test suite validates correctness under heavy contention and failure scenarios:
 
-- **51 Automated Tests**: **51 Passed, 0 Failures, 0 Errors** (100% Pass Rate across 38 Fast H2 + 13 PostgreSQL 16 Testcontainers tests).
+- **153 Automated Tests**: **153 Passed, 0 Failures, 0 Errors** (100% Pass Rate across 118 Fast H2 + 35 PostgreSQL 16 Testcontainers tests).
 - **1,000-Request Concurrency Stress Benchmark (`ConcurrentPaymentTest`)**:
   - **Objective**: Flood the payment engine with 1,000 concurrent duplicate payment requests sharing the exact same idempotency key and payload to verify zero double-spending, atomic locks, and idempotency guarantees under extreme contention.
   - **Concurrency Model**: Bounded `ExecutorService` configured with 50 worker threads coordinated via a `CountDownLatch` dual-barrier (`readyLatch` and `startLatch`) to ensure simultaneous worker contention.
@@ -257,8 +257,8 @@ The test suite validates correctness under heavy contention and failure scenario
     - **Service-Level Benchmark**: Invokes `PaymentProcessingService.initiatePayment()` directly in-process; does not measure HTTP/Tomcat serialization or network overhead.
 - **PostgreSQL 16 Testcontainers Integration & Locking Suite (`com.paymentsystem.postgres.*`)**:
   - **Why Real PostgreSQL Testing**: In-memory H2 emulates PostgreSQL syntax but uses different concurrency semantics, table-level/coarse locking, and zero network socket I/O. Real PostgreSQL 16 testing via Testcontainers validates authentic multi-version concurrency control (MVCC), row-level locks, and transaction isolation.
-  - **Docker-Free Local Development**: The local test suite (`mvn clean test`) excludes Testcontainers and runs the 111 fast H2 tests with zero Docker requirement.
-  - **GitHub Actions Execution**: Automated 3-stage CI pipeline executes fast H2 tests first (Stage A, 111 tests) followed by the PostgreSQL 16 Testcontainers suite on Ubuntu runners with Docker pre-installed (Stage B, 35 tests) and application packaging & dashboard verification (Stage C). Verified: [GitHub Actions Run 39263927415](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system/actions/runs/39263927415) (146/146 tests passing across all 3 stages).
+  - **Docker-Free Local Development**: The local test suite (`mvn clean test`) excludes Testcontainers and runs the 118 fast H2 tests with zero Docker requirement.
+  - **GitHub Actions Execution**: Automated 3-stage CI pipeline executes fast H2 tests first (Stage A, 118 tests) followed by the PostgreSQL 16 Testcontainers suite on Ubuntu runners with Docker pre-installed (Stage B, 35 tests) and application packaging & dashboard verification (Stage C). Suite includes hardened security, concurrency, and outbox regression tests.
   - **PostgreSQL Test Suites**:
     1. **Idempotency & Replay Invariants (`PostgreSqlIdempotencyTest`)**:
        - Validates atomic insert on unique constraint, in-progress HTTP 409 conflict, cached replay return, payload mismatch rejection, and concurrent duplicate prevention.
@@ -293,10 +293,11 @@ The test suite validates correctness under heavy contention and failure scenario
 | 📊 **[Requirements Traceability Matrix](docs/requirements-matrix.md)** | Direct mapping to Standard Chartered Bank Development Engineer (Band 8) requirements (100% verified coverage). |
 | 🏛️ **[System Architecture](docs/architecture.md)** | Deep-dive into distributed topology, concurrency models, partitioned queues, and retry loops. |
 | 🪝 **[Webhook & Outbox Engine](docs/webhooks.md)** | Complete specification for Transactional Outbox, HMAC-SHA256 signatures, backoff, DLQ, and crash recovery. |
-| 📄 **[Keyset Pagination Specification](docs/pagination.md)** | Production keyset cursor pagination with composite ordering, HMAC-SHA256 signatures, filter binding, and $O(1)$ SQL optimization. |
+| 📄 **[Keyset Pagination Specification](docs/pagination.md)** | Production keyset cursor pagination with composite ordering, HMAC-SHA256 signatures, filter binding, and $O(\log N + K)$ index seek optimization. |
+| 🛡️ **[Code Review & Security Audit](docs/code-review.md)** | Technical code review, security audit, concurrency verification, and production readiness assessment. |
 | ⚖️ **[Architectural Decision Records (ADRs)](docs/design-decisions.md)** | Rationale for SHA-256 payload digests, fail-fast error classification, and polyglot storage. |
 | 🔌 **[REST API Guide](docs/api-guide.md)** | Complete HTTP endpoints, OpenAPI 3.0 schemas, headers, pagination, and error responses. |
-| 🧪 **[Test Strategy & Verification](docs/testing.md)** | Verification evidence for 101 automated tests (78 Fast H2 + 23 PostgreSQL 16 Testcontainers), concurrency stress benchmarks, and locking mechanisms. |
+| 🧪 **[Test Strategy & Verification](docs/testing.md)** | Verification evidence for 153 automated tests (118 Fast H2 + 35 PostgreSQL 16 Testcontainers), concurrency stress benchmarks, and locking mechanisms. |
 | 🎯 **[Technical Interview Preparation](docs/interview-preparation.md)** | 14 rigorous interview questions and concise code-backed architectural explanations. |
 | 📝 **[Initial Codebase Audit](docs/initial-audit.md)** | Forensic analysis of baseline code, identified edge cases, and upgrade roadmap. |
 | 📜 **[Development Log](docs/dev-log.md)** | Chronological log of changes, refactorings, and verification commands. |
