@@ -73,3 +73,27 @@ CREATE TABLE IF NOT EXISTS refunds (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_refunds_refund_id ON refunds(refund_id);
 CREATE INDEX IF NOT EXISTS idx_refunds_payment_id ON refunds(payment_id);
 CREATE INDEX IF NOT EXISTS idx_refunds_user_id ON refunds(user_id);
+
+-- 5. Outbox Events Table (Transactional Outbox Pattern)
+CREATE TABLE IF NOT EXISTS outbox_events (
+    id BIGSERIAL PRIMARY KEY,
+    event_id VARCHAR(64) NOT NULL UNIQUE,
+    event_type VARCHAR(64) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    payload TEXT NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    attempt_count INT NOT NULL DEFAULT 0,
+    max_attempts INT NOT NULL DEFAULT 5,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    next_attempt_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    delivered_at TIMESTAMP WITH TIME ZONE,
+    last_error VARCHAR(1024),
+    locked_until TIMESTAMP WITH TIME ZONE,
+    lease_owner VARCHAR(64)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_outbox_event_id ON outbox_events(event_id);
+CREATE INDEX IF NOT EXISTS idx_outbox_status_next_attempt ON outbox_events(status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_outbox_aggregate_id ON outbox_events(aggregate_id);
+

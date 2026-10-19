@@ -74,3 +74,27 @@
 - **Activity**: Added `.env.example` with template configurations for PostgreSQL, MongoDB, Spring Boot, and Streamlit.
 - **Activity**: Verified `docker-compose.yml` health checks and startup conditions.
 - **Activity**: Verified GitHub Actions workflow `.github/workflows/ci.yml`.
+
+---
+
+## Entry 9: Transactional Outbox Pattern & Reliable Webhook Delivery Engine (Step 4)
+- **Activity**: Designed and implemented the Transactional Outbox pattern to guarantee at-least-once, tamper-proof webhook notifications for payment and refund state transitions without dual-write hazards.
+- **Components Created**:
+  - `com.paymentsystem.entity.OutboxEvent` & `com.paymentsystem.entity.OutboxStatus` (`PENDING`, `PROCESSING`, `DELIVERED`, `DEAD_LETTER`).
+  - `com.paymentsystem.repository.OutboxEventRepository` with atomic row-level claiming (`claimEvent`) and candidate query.
+  - `com.paymentsystem.service.PaymentTransactionCoordinator`: Atomic commit of payment/refund state + outbox event within a single database transaction.
+  - `com.paymentsystem.service.WebhookSignatureService`: HMAC-SHA256 signature generator (`v1=...`) with canonical timestamp prefix and constant-time verification.
+  - `com.paymentsystem.service.WebhookSecurityValidator`: Strict SSRF protection blocking private IPs, loopback, and cloud metadata IP (169.254.169.254).
+  - `com.paymentsystem.service.WebhookRetryPolicy`: Exponential backoff with random jitter formula and HTTP status classification (429/5xx retryable, 4xx permanent).
+  - `com.paymentsystem.worker.OutboxDeliveryWorker`: Scheduled polling, lease management, worker crash recovery, zero open DB transactions during HTTP I/O.
+- **Deliverables**: Generated `docs/webhooks.md`, updated `src/main/resources/schema.sql`, updated YAML configuration across environments.
+- **Testing**: Added 6 comprehensive test suites:
+  - `WebhookRetryPolicyTest` (6 tests)
+  - `WebhookSecurityValidatorTest` (7 tests)
+  - `WebhookSignatureServiceTest` (10 tests)
+  - `OutboxDeliveryWorkerTest` (10 tests)
+  - `TransactionalOutboxIntegrationTest` (6 tests)
+  - `PostgreSqlTransactionalOutboxIntegrationTest` (10 tests)
+- **Action**: Ran `mvn clean test`.
+- **Result**: All 78 fast H2 & unit/integration tests passed cleanly (100% success rate); PostgreSQL 16 Testcontainers suite has 23 tests, bringing system total to 101 tests.
+

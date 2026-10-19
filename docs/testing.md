@@ -2,9 +2,9 @@
 
 **System**: Distributed Fault-Tolerant Payment System  
 **Test Suite**: JUnit 5 + Mockito + Spring Boot Test + MockMvc + PostgreSQL 16 Testcontainers  
-**Execution Status**: **51 Tests Passing (100% Success Rate)**  
-- Fast H2 In-Memory Suite: 38 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
-- PostgreSQL 16 Testcontainers Suite: 13 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
+**Execution Status**: **101 Tests Passing (100% Success Rate)**  
+- Fast H2 In-Memory Suite: 78 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
+- PostgreSQL 16 Testcontainers Suite: 23 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
 **CI/CD Pipeline**: GitHub Actions Run [`39147420561`](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system/actions/runs/39147420561) (All 3 Stages: Fast Tests, PostgreSQL 16 Suite, Packaging & Dashboard Verified)  
 **Target Role**: Standard Chartered Development Engineer (Band 8)  
 
@@ -12,12 +12,13 @@
 
 ## 1. Testing Philosophy & Pyramid
 
-Financial systems require uncompromising verification standards. Our testing methodology emphasizes high-concurrency invariants, boundary state transitions, 24-hour retention expiry, and fault tolerance recovery:
+Financial systems require uncompromising verification standards. Our testing methodology emphasizes high-concurrency invariants, boundary state transitions, 24-hour retention expiry, transactional outbox atomicity, and fault tolerance recovery:
 
 ```mermaid
-pie title Test Suite Distribution (51 Tests Total)
+pie title Test Suite Distribution (101 Tests Total)
+    "Transactional Outbox & Webhook Tests" : 49
+    "PostgreSQL 16 Locking & Idempotency" : 23
     "Idempotency Expiry & Replay Tests" : 11
-    "PostgreSQL 16 Locking & Idempotency" : 13
     "REST Controller MockMvc Tests" : 10
     "Core Service Unit Tests" : 14
     "High-Concurrency Stress Benchmarks" : 2
@@ -31,8 +32,8 @@ pie title Test Suite Distribution (51 Tests Total)
 ### Local Fast Execution (Docker-Free)
 Running `mvn clean test` across the complete project locally on any developer machine (including Windows without Docker Desktop) produces:
 
-- **Total Tests Executed**: 38
-- **Passed**: 38
+- **Total Tests Executed**: 78
+- **Passed**: 78
 - **Failures**: 0
 - **Errors**: 0
 - **Skipped**: 0
@@ -40,10 +41,10 @@ Running `mvn clean test` across the complete project locally on any developer ma
 
 ### Dual-Stage GitHub Actions Execution (CI/CD)
 On GitHub Actions Ubuntu runners, both test suites are executed in strict isolation:
-- **Stage A (Fast H2 Suite)**: `mvn clean test -B` (38 passed)
-- **Stage B (PostgreSQL 16 Suite)**: `mvn test -Ppostgres-it -B` (13 passed)
+- **Stage A (Fast H2 Suite)**: `mvn clean test -B` (78 passed)
+- **Stage B (PostgreSQL 16 Suite)**: `mvn test -Ppostgres-it -B` (23 passed)
 - **Stage C (Packaging & Dashboard)**: JAR packaged and Streamlit validated
-- **Overall Result**: **51 Tests Run, 51 Passed, 0 Failures, 0 Errors**
+- **Overall Result**: **101 Tests Run, 101 Passed, 0 Failures, 0 Errors**
 
 ---
 
@@ -55,11 +56,17 @@ On GitHub Actions Ubuntu runners, both test suites are executed in strict isolat
 | `PaymentControllerTest` | Spring MVC MockMvc | 5 | 1. `POST /api/v1/payments` returns 201 CREATED for sync payment.<br>2. Returns 409 CONFLICT on payload mismatch.<br>3. Returns `Idempotent-Replayed: true` header on cached payment.<br>4. Excludes replay header on original payment execution.<br>5. Supports pagination parameters (`page`, `size`). |
 | `RefundControllerTest` | Spring MVC MockMvc | 5 | 1. `POST /api/v1/refunds` returns 201 CREATED.<br>2. Returns 422 UNPROCESSABLE_ENTITY on invalid state transition.<br>3. Returns `Idempotent-Replayed: true` header on cached refund.<br>4. Excludes replay header on original refund execution.<br>5. `GET /api/v1/refunds/{id}` returns 200 OK. |
 | `IdempotencyServiceTest` | Unit / Mockito | 7 | 1. New key acquisition lock.<br>2. Concurrent in-progress request conflict.<br>3. Cached response return on identical replay.<br>4. Reused key with payload mismatch rejection (`PayloadMismatchException`).<br>5. Atomic acquisition of expired key via `updateIfExpired`.<br>6. Expired key race condition detection (IN_PROGRESS -> 409).<br>7. Purge of expired keys excluding IN_PROGRESS records. |
+| `TransactionalOutboxIntegrationTest` | E2E Integration / SpringBootTest | 6 | 1. Successful payment atomically creates exactly one outbox event in same database transaction.<br>2. Cached idempotency replay creates zero duplicate outbox events.<br>3. Rolled-back payment produces zero committed outbox events.<br>4. Successful refund creates `refund.succeeded` outbox event atomically.<br>5. Background delivery worker claims event and delivers successfully to endpoint.<br>6. Webhook delivery failure does not impact underlying payment transaction status. |
+| `OutboxDeliveryWorkerTest` | Unit / Mockito | 10 | 1. Successful delivery marks event DELIVERED and records timestamp.<br>2. HTTP 500 error schedules retry with exponential backoff.<br>3. HTTP 429 rate limit schedules retry with backoff.<br>4. SocketTimeoutException schedules retry with backoff.<br>5. Max retry attempts exceeded transitions event to DEAD_LETTER.<br>6. Permanent HTTP 400 immediately transitions to DEAD_LETTER (0 retries).<br>7. Competing worker fails claim safely (returns false, 0 duplicate delivery).<br>8. Polling loop finds candidates and processes batch.<br>9. Empty candidate list exits polling loop cleanly.<br>10. Manual redelivery resets attempt count and queues event for retry. |
+| `WebhookSignatureServiceTest` | Unit / Security | 10 | 1. Generates versioned `v1=` HMAC-SHA256 signature.<br>2. Verification succeeds with authentic payload, timestamp, and secret.<br>3. Modified payload fails verification (tamper resistance).<br>4. Incorrect signing secret fails verification.<br>5. Expired timestamp beyond tolerance window fails verification (replay attack defense).<br>6. Future timestamp beyond tolerance window fails verification (clock skew defense).<br>7. Missing or null signature header fails safely.<br>8. Missing or malformed timestamp fails safely.<br>9. Malformed signature lacking `v1=` prefix fails safely.<br>10. Payload within tolerance window passes verification. |
+| `WebhookSecurityValidatorTest` | Unit / Security | 7 | 1. Valid external HTTPS URL accepted in production.<br>2. Plain HTTP rejected in production.<br>3. Localhost blocked to prevent SSRF.<br>4. Loopback IPv4/IPv6 addresses blocked.<br>5. Cloud metadata IP (`169.254.169.254`) blocked.<br>6. RFC 1918 private subnets (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) blocked.<br>7. Test environment permits localhost and mock HTTP receivers. |
+| `WebhookRetryPolicyTest` | Unit / Mathematical | 6 | 1. Exponential backoff increases exponentially across retry attempts.<br>2. Jitter stays strictly within expected 0% to 25% bounds.<br>3. Exponential backoff respects maximum configured delay cap (300,000 ms).<br>4. Large attempt numbers do not cause integer overflow.<br>5. Retryable HTTP status codes (429, 500, 502, 503, 504) correctly classified.<br>6. Retryable vs non-retryable exceptions correctly classified. |
 | `ConcurrentPaymentTest` | High-Concurrency Stress Benchmark | 1 | 1,000 concurrent duplicate requests across 3 isolated runs; bounded 50-worker pool; verifies exactly 1 charge processed, cached replays, 409 conflict handling, zero double-spending, and detailed p50/p95/p99 latency metrics. |
 | `FaultToleranceRetryTest` | Fault Simulation | 1 | Injected gateway socket read timeouts; validates exponential backoff with jitter and successful recovery on subsequent attempt. |
 | `PaymentProcessingServiceTest` | Unit / Mockito | 3 | 1. Sufficient balance payment authorization.<br>2. Insufficient balance fail-fast check (`InsufficientBalanceException` with 0 retries).<br>3. Collection pagination (`page`, `size`). |
 | `RefundProcessingServiceTest` | Unit / Mockito | 4 | 1. Valid partial refund and balance restoration.<br>2. Rejection of refund on FAILED payments.<br>3. Prevention of cumulative refunds exceeding transaction amount.<br>4. Cached response on duplicate refund idempotency key. |
 | `PaymentLifecycleIntegrationTest` | E2E Integration | 1 | Complete banking lifecycle: User creation -> Sync payment -> Idempotent replay with header -> Payload mismatch -> Input validation -> Payment retrieval -> Valid refund -> Over-refund rejection -> Audit trail verification. |
+| `PostgreSqlTransactionalOutboxIntegrationTest` | Real PostgreSQL 16 Integration | 10 | 1. Payment state and outbox event commit together atomically in PostgreSQL.<br>2. Aborted transaction rolls back both payment and outbox event.<br>3. Exactly one worker claims event under high concurrency (mutual exclusion).<br>4. Unique event ID constraint enforcement (`idx_outbox_event_id`).<br>5. State transitions: PENDING -> PROCESSING -> DELIVERED.<br>6. Dead-letter persistence on retry exhaustion.<br>7. Worker lease recovery after worker crash.<br>8. Concurrent distinct event claiming across multiple workers without conflict.<br>9. Payment idempotency under concurrent duplicate requests.<br>10. Compatibility with 24-hour expiry logic alongside outbox. |
 | `PostgreSqlIdempotencyTest` | Real PostgreSQL 16 Integration | 7 | 1. New key acquisition in PostgreSQL.<br>2. In-progress 409 conflict.<br>3. Cached replay without double deduction.<br>4. Payload mismatch rejection.<br>5. Concurrent duplicate prevention (1 charge, 0 double spend).<br>6. Expired key reuse creates new payment in PostgreSQL.<br>7. Concurrent expired-key reuse prevents double charges via row-level atomic locks. |
 | `PostgreSqlOptimisticLockingTest` | Concurrency / Locking | 3 | Validates JPA `@Version` on `User` and `PaymentTransaction`. Stale entity updates trigger genuine `OptimisticLockingFailureException` in PostgreSQL, preventing lost updates. |
 | `PostgreSqlPessimisticLockingTest` | Concurrency / Locking | 2 | Validates `@Lock(LockModeType.PESSIMISTIC_WRITE)` (`SELECT FOR UPDATE`). Proves PostgreSQL lock manager blocks competing transactions until the lock holder commits. |
@@ -184,3 +191,32 @@ Step 3 introduces temporal lifecycle management for idempotency tokens, verified
 #### 5. Audit & Transaction History Preservation
 - The background scheduled task (`cleanupExpiredKeys`) purges expired records from `idempotency_keys` while strictly excluding active (`IN_PROGRESS`) transactions.
 - Historical `PaymentTransaction` records and immutable NoSQL/MongoDB `audit_logs` are never deleted, ensuring an unbroken financial audit trail.
+
+---
+
+### 4.8 Step 4: Transactional Outbox Pattern & Reliable Webhook Delivery Invariants
+
+The Step 4 suite verifies distributed atomicity and tamper-proof notification guarantees under high concurrency:
+
+#### 1. Zero Dual-Write Atomicity
+- `PaymentTransactionCoordinator` guarantees that persisting a terminal payment state (`SUCCESS` or `FAILED`) and inserting the corresponding `OutboxEvent` (`payment.succeeded` or `payment.failed`) execute within a single `@Transactional` boundary.
+- **Rollback Invariant**: In `PostgreSqlTransactionalOutboxIntegrationTest.testRollbackBehavior_RollsBackBothOnPostgreSql`, if an unhandled runtime exception aborts the transaction, PostgreSQL rolls back both the payment record and the outbox event. Zero orphaned events exist.
+- **Idempotent Replay Invariant**: Cached idempotency replays generate zero duplicate outbox events (`testCachedPaymentReplay_ProducesNoDuplicateOutboxEvents`).
+
+#### 2. Mutual Exclusion via Atomic Claiming
+- `OutboxEventRepository.claimEvent` uses an atomic conditional UPDATE:
+  `UPDATE outbox_events SET status = 'PROCESSING', lease_owner = :workerId, locked_until = :leaseUntil, updated_at = :now WHERE id = :id AND (status = 'PENDING' OR (status = 'PROCESSING' AND locked_until < :now))`
+- In `PostgreSqlTransactionalOutboxIntegrationTest.testConcurrentOutboxClaiming_MutualExclusion`, 20 worker threads contend to claim the same outbox event simultaneously. Exactly 1 worker wins (`rows_updated = 1`) and 19 workers fail safely (`rows_updated = 0`).
+
+#### 3. Worker Crash Recovery (Lease Expiration)
+- If a worker crashes while an HTTP request is in-flight, the event remains in `PROCESSING` with `locked_until = now + 60s`.
+- When `locked_until < now`, `findCandidateEventIds` surfaces the abandoned event, and any active worker safely reclaims it (`testWorkerLeaseRecovery_AfterCrash`).
+
+#### 4. No Open Database Transactions During External HTTP Calls
+- Database transactions are held for microseconds solely during atomic claim and result persistence.
+- External HTTP network I/O (`deliveryService.deliver(event)`) occurs strictly outside any database transaction boundary, preventing thread and connection pool starvation.
+
+#### 5. HMAC-SHA256 Signatures & SSRF Protection
+- Outgoing requests carry versioned HMAC-SHA256 signatures (`v1=...`) computed from the canonical timestamp and raw request body. Verified with constant-time equality check (`MessageDigest.isEqual`) to prevent timing side-channel attacks.
+- `WebhookSecurityValidator` blocks loopback, private subnets (RFC 1918), and AWS metadata IP (`169.254.169.254`).
+

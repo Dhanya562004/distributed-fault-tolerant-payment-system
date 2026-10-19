@@ -39,3 +39,7 @@ logging:
 app:
   idempotency:
     retention-hours: 24
+  webhook:
+    enabled: false
+    allow-private-destinations: true
+

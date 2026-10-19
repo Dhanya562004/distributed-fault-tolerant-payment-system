@@ -24,3 +24,8 @@ logging:
   level:
     root: INFO
     com.paymentsystem: INFO
+
+app:
+  webhook:
+    allow-private-destinations: false
+

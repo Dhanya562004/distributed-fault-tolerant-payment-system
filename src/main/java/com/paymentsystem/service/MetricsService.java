@@ -11,4 +11,9 @@ public interface MetricsService {
     void recordDlqEntry();
     void recordLatency(long durationMs);
     SystemMetricsResponse getMetrics(long currentQueueDepth);
+
+    default void incrementWebhookAttempts() {}
+    default void incrementWebhookSuccess() {}
+    default void incrementWebhookFailure() {}
+    default void incrementWebhookDlq() {}
 }

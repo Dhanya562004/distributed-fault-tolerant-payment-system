@@ -22,6 +22,10 @@ public class MetricsServiceImpl implements MetricsService {
     private final AtomicLong dlqCount = new AtomicLong(0);
     private final AtomicLong latencySumMs = new AtomicLong(0);
     private final AtomicLong latencyCount = new AtomicLong(0);
+    private final AtomicLong webhookAttempts = new AtomicLong(0);
+    private final AtomicLong webhookSuccess = new AtomicLong(0);
+    private final AtomicLong webhookFailure = new AtomicLong(0);
+    private final AtomicLong webhookDlq = new AtomicLong(0);
 
     @Autowired(required = false)
     private PaymentTransactionRepository paymentTransactionRepository;
@@ -115,5 +119,25 @@ public class MetricsServiceImpl implements MetricsService {
         response.setStatusBreakdown(statusMap);
 
         return response;
+    }
+
+    @Override
+    public void incrementWebhookAttempts() {
+        webhookAttempts.incrementAndGet();
+    }
+
+    @Override
+    public void incrementWebhookSuccess() {
+        webhookSuccess.incrementAndGet();
+    }
+
+    @Override
+    public void incrementWebhookFailure() {
+        webhookFailure.incrementAndGet();
+    }
+
+    @Override
+    public void incrementWebhookDlq() {
+        webhookDlq.incrementAndGet();
     }
 }

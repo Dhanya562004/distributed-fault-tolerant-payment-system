@@ -318,3 +318,25 @@ All error responses return a standardized schema:
   "deadLetterQueueSize": 0
 }
 ```
+
+---
+
+## 6. Secure Webhook Delivery & Event Notifications
+
+ApexPay automatically dispatches signed HTTP webhook notifications to registered endpoints upon committed payment and refund state transitions using the **Transactional Outbox Pattern**.
+
+### 6.1 Webhook HTTP Headers
+| Header Name | Description | Example |
+| :--- | :--- | :--- |
+| `X-ApexPay-Event-Id` | Stable unique event identifier across all retries | `evt_5f187a21394c489ba12de890f1234567` |
+| `X-ApexPay-Timestamp` | Integer Unix epoch timestamp in seconds of this delivery attempt | `1792406520` |
+| `X-ApexPay-Signature` | Versioned HMAC-SHA256 hex digest (`v1=...`) | `v1=a3f9104058d88c42...` |
+
+### 6.2 Canonical Signature Calculation
+```text
+canonicalMessage = timestampHeader + "." + rawRequestBodyUtf8
+signature = "v1=" + HmacSHA256(canonicalMessage, webhookSigningSecret)
+```
+
+Receivers verify the signature using constant-time comparison (`MessageDigest.isEqual`) and enforce a timestamp tolerance window (default 300 seconds) to prevent replay attacks. See [docs/webhooks.md](file:///c:/Users/Deeksha/OneDrive/Desktop/distributed%20fault%20tolerant%20payment%20system/docs/webhooks.md) for full architecture and verification samples.
+

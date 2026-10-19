@@ -36,3 +36,18 @@ app:
   idempotency:
     retention-hours: 24
     cleanup-cron: "0 0 * * * *"
+  webhook:
+    enabled: ${WEBHOOK_ENABLED:false}
+    destination-url: ${WEBHOOK_DESTINATION_URL:}
+    signing-secret: ${WEBHOOK_SIGNING_SECRET:}
+    poll-interval-ms: 5000
+    batch-size: 50
+    max-attempts: 5
+    base-delay-ms: 1000
+    max-delay-ms: 300000
+    connect-timeout-ms: 3000
+    read-timeout-ms: 5000
+    signature-tolerance-seconds: 300
+    lease-duration-seconds: 60
+    allow-private-destinations: false
+

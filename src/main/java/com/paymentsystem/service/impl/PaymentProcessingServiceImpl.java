@@ -19,6 +19,7 @@ import com.paymentsystem.service.GatewaySimulationService;
 import com.paymentsystem.service.IdempotencyService;
 import com.paymentsystem.service.MetricsService;
 import com.paymentsystem.service.PaymentProcessingService;
+import com.paymentsystem.service.PaymentTransactionCoordinator;
 import com.paymentsystem.worker.DistributedQueueManager;
 import com.paymentsystem.worker.EventMessage;
 import org.slf4j.Logger;
@@ -46,6 +47,19 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
     private final MetricsService metricsService;
     private final DistributedQueueManager queueManager;
     private final ObjectMapper objectMapper;
+    private final PaymentTransactionCoordinator paymentCoordinator;
+
+    public PaymentProcessingServiceImpl(PaymentTransactionRepository paymentRepository,
+                                        UserRepository userRepository,
+                                        IdempotencyService idempotencyService,
+                                        GatewaySimulationService gatewaySimulationService,
+                                        AuditService auditService,
+                                        MetricsService metricsService,
+                                        DistributedQueueManager queueManager,
+                                        ObjectMapper objectMapper) {
+        this(paymentRepository, userRepository, idempotencyService, gatewaySimulationService,
+                auditService, metricsService, queueManager, objectMapper, null);
+    }
 
     @Autowired
     public PaymentProcessingServiceImpl(PaymentTransactionRepository paymentRepository,
@@ -55,7 +69,8 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                                         AuditService auditService,
                                         MetricsService metricsService,
                                         DistributedQueueManager queueManager,
-                                        ObjectMapper objectMapper) {
+                                        ObjectMapper objectMapper,
+                                        @Autowired(required = false) PaymentTransactionCoordinator paymentCoordinator) {
         this.paymentRepository = paymentRepository;
         this.userRepository = userRepository;
         this.idempotencyService = idempotencyService;
@@ -64,6 +79,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
         this.metricsService = metricsService;
         this.queueManager = queueManager;
         this.objectMapper = objectMapper;
+        this.paymentCoordinator = paymentCoordinator;
     }
 
     @Override
@@ -191,8 +207,12 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
         metricsService.recordLatency(latencyMs);
 
         if (success) {
-            tx.setStatus(PaymentStatus.SUCCESS);
-            paymentRepository.saveAndFlush(tx);
+            if (paymentCoordinator != null) {
+                paymentCoordinator.commitPaymentSuccess(tx);
+            } else {
+                tx.setStatus(PaymentStatus.SUCCESS);
+                paymentRepository.saveAndFlush(tx);
+            }
             metricsService.incrementSuccessfulTransactions();
 
             auditService.recordAuditLog(
@@ -205,9 +225,13 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
             idempotencyService.markCompleted(request.getIdempotencyKey(), response, 200);
             return response;
         } else {
-            tx.setStatus(PaymentStatus.FAILED);
-            tx.setFailureReason(lastError);
-            paymentRepository.saveAndFlush(tx);
+            if (paymentCoordinator != null) {
+                paymentCoordinator.commitPaymentFailure(tx, lastError);
+            } else {
+                tx.setStatus(PaymentStatus.FAILED);
+                tx.setFailureReason(lastError);
+                paymentRepository.saveAndFlush(tx);
+            }
             metricsService.incrementFailedTransactions();
 
             auditService.recordAuditLog(
@@ -269,8 +293,12 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
 
         try {
             executeSinglePaymentAttempt(tx, req);
-            tx.setStatus(PaymentStatus.SUCCESS);
-            paymentRepository.saveAndFlush(tx);
+            if (paymentCoordinator != null) {
+                paymentCoordinator.commitPaymentSuccess(tx);
+            } else {
+                tx.setStatus(PaymentStatus.SUCCESS);
+                paymentRepository.saveAndFlush(tx);
+            }
             metricsService.incrementSuccessfulTransactions();
 
             auditService.recordAuditLog(
@@ -285,13 +313,21 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
 
         } catch (PaymentProcessingException ex) {
             logger.warn("[WORKER {}] Payment processing exception for {}: {}", workerId, tx.getPaymentId(), ex.getMessage());
-            tx.setFailureReason(ex.getMessage());
-            paymentRepository.saveAndFlush(tx);
+            if (paymentCoordinator != null) {
+                paymentCoordinator.commitPaymentFailure(tx, ex.getMessage());
+            } else {
+                tx.setFailureReason(ex.getMessage());
+                paymentRepository.saveAndFlush(tx);
+            }
             return false;
         } catch (Exception ex) {
             logger.error("[WORKER {}] Unexpected failure processing payment {}: {}", workerId, tx.getPaymentId(), ex.getMessage(), ex);
-            tx.setFailureReason(ex.getMessage());
-            paymentRepository.saveAndFlush(tx);
+            if (paymentCoordinator != null) {
+                paymentCoordinator.commitPaymentFailure(tx, ex.getMessage());
+            } else {
+                tx.setFailureReason(ex.getMessage());
+                paymentRepository.saveAndFlush(tx);
+            }
             return false;
         }
     }

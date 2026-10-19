@@ -10,12 +10,12 @@
 [![Spring Boot 3.3.4](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F.svg?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
 [![Docker Container](https://img.shields.io/badge/Docker-Multi--Stage%20Container-2496ED.svg?style=flat-square&logo=docker)](Dockerfile)
 [![Polyglot Persistence](https://img.shields.io/badge/Storage-PostgreSQL%20%7C%20MongoDB%20%7C%20H2-336791.svg?style=flat-square&logo=postgresql)](docs/architecture.md)
-[![Automated Tests](https://img.shields.io/badge/Tests-51%20Passing%20(100%25)-10B981.svg?style=flat-square&logo=checkmarx)](docs/testing.md)
+[![Automated Tests](https://img.shields.io/badge/Tests-101%20Passing%20(100%25)-10B981.svg?style=flat-square&logo=checkmarx)](docs/testing.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 
 <p align="center">
   <b>A Production-Grade, Resilient Transaction Processing Engine modeled after tier-1 banking systems at Standard Chartered Bank, Stripe, and PayPal.</b><br>
-  Built with <b>Java 17, Spring Boot 3.3, and Python Streamlit</b> featuring <b>distributed cryptographic idempotency</b>, <b>24-hour retention expiry</b>, <b>Idempotent-Replayed HTTP headers</b>, <b>account-partitioned concurrency queues</b>, <b>exponential backoff with full jitter</b>, <b>fail-fast failure classification</b>, and <b>immutable NoSQL audit trails</b>.
+  Built with <b>Java 17, Spring Boot 3.3, and Python Streamlit</b> featuring <b>distributed cryptographic idempotency</b>, <b>24-hour retention expiry</b>, <b>Idempotent-Replayed HTTP headers</b>, <b>Transactional Outbox Pattern & Reliable Webhook Engine</b>, <b>account-partitioned concurrency queues</b>, <b>exponential backoff with full jitter</b>, <b>fail-fast failure classification</b>, and <b>immutable NoSQL audit trails</b>.
 </p>
 
 [🎮 Launch Cloud Control Room](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/) • [🔌 Explore OpenAPI Specification](https://apexpay-backend-sc5s.onrender.com/swagger-ui.html) • [📑 Engineering Docs Suite](#-engineering-documentation-suite)
@@ -292,9 +292,10 @@ The test suite validates correctness under heavy contention and failure scenario
 | :--- | :--- |
 | 📊 **[Requirements Traceability Matrix](docs/requirements-matrix.md)** | Direct mapping to Standard Chartered Bank Development Engineer (Band 8) requirements (100% verified coverage). |
 | 🏛️ **[System Architecture](docs/architecture.md)** | Deep-dive into distributed topology, concurrency models, partitioned queues, and retry loops. |
+| 🪝 **[Webhook & Outbox Engine](docs/webhooks.md)** | Complete specification for Transactional Outbox, HMAC-SHA256 signatures, backoff, DLQ, and crash recovery. |
 | ⚖️ **[Architectural Decision Records (ADRs)](docs/design-decisions.md)** | Rationale for SHA-256 payload digests, fail-fast error classification, and polyglot storage. |
 | 🔌 **[REST API Guide](docs/api-guide.md)** | Complete HTTP endpoints, OpenAPI 3.0 schemas, headers, pagination, and error responses. |
-| 🧪 **[Test Strategy & Verification](docs/testing.md)** | Verification evidence for 31 automated tests, PostgreSQL 16 Testcontainers, concurrency stress test, and locking mechanisms. |
+| 🧪 **[Test Strategy & Verification](docs/testing.md)** | Verification evidence for 101 automated tests (78 Fast H2 + 23 PostgreSQL 16 Testcontainers), concurrency stress benchmarks, and locking mechanisms. |
 | 🎯 **[Technical Interview Preparation](docs/interview-preparation.md)** | 14 rigorous interview questions and concise code-backed architectural explanations. |
 | 📝 **[Initial Codebase Audit](docs/initial-audit.md)** | Forensic analysis of baseline code, identified edge cases, and upgrade roadmap. |
 | 📜 **[Development Log](docs/dev-log.md)** | Chronological log of changes, refactorings, and verification commands. |

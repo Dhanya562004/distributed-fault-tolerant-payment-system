@@ -15,6 +15,7 @@ import com.paymentsystem.repository.RefundTransactionRepository;
 import com.paymentsystem.repository.UserRepository;
 import com.paymentsystem.service.AuditService;
 import com.paymentsystem.service.IdempotencyService;
+import com.paymentsystem.service.PaymentTransactionCoordinator;
 import com.paymentsystem.service.RefundProcessingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +41,16 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
     private final AuditService auditService;
     private final IdempotencyService idempotencyService;
     private final ObjectMapper objectMapper;
+    private final PaymentTransactionCoordinator paymentCoordinator;
+
+    public RefundProcessingServiceImpl(RefundTransactionRepository refundRepository,
+                                       PaymentTransactionRepository paymentRepository,
+                                       UserRepository userRepository,
+                                       AuditService auditService,
+                                       IdempotencyService idempotencyService,
+                                       ObjectMapper objectMapper) {
+        this(refundRepository, paymentRepository, userRepository, auditService, idempotencyService, objectMapper, null);
+    }
 
     @Autowired
     public RefundProcessingServiceImpl(RefundTransactionRepository refundRepository,
@@ -47,13 +58,15 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
                                        UserRepository userRepository,
                                        AuditService auditService,
                                        IdempotencyService idempotencyService,
-                                       ObjectMapper objectMapper) {
+                                       ObjectMapper objectMapper,
+                                       @Autowired(required = false) PaymentTransactionCoordinator paymentCoordinator) {
         this.refundRepository = refundRepository;
         this.paymentRepository = paymentRepository;
         this.userRepository = userRepository;
         this.auditService = auditService;
         this.idempotencyService = idempotencyService;
         this.objectMapper = objectMapper;
+        this.paymentCoordinator = paymentCoordinator;
     }
 
     @Override
@@ -124,6 +137,11 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
 
         RefundResponse response = mapToResponse(refund);
         idempotencyService.markCompleted(request.getIdempotencyKey(), response, 200);
+
+        if (paymentCoordinator != null) {
+            paymentCoordinator.commitRefundSuccess(refund);
+        }
+
         return response;
     }
 
