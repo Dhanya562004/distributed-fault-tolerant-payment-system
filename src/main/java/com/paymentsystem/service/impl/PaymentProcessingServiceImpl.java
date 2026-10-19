@@ -18,6 +18,7 @@ import com.paymentsystem.service.AuditService;
 import com.paymentsystem.service.GatewaySimulationService;
 import com.paymentsystem.service.IdempotencyService;
 import com.paymentsystem.service.MetricsService;
+import com.paymentsystem.service.PaymentPaginationService;
 import com.paymentsystem.service.PaymentProcessingService;
 import com.paymentsystem.service.PaymentTransactionCoordinator;
 import com.paymentsystem.worker.DistributedQueueManager;
@@ -48,6 +49,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
     private final DistributedQueueManager queueManager;
     private final ObjectMapper objectMapper;
     private final PaymentTransactionCoordinator paymentCoordinator;
+    private final PaymentPaginationService paginationService;
 
     public PaymentProcessingServiceImpl(PaymentTransactionRepository paymentRepository,
                                         UserRepository userRepository,
@@ -58,7 +60,20 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                                         DistributedQueueManager queueManager,
                                         ObjectMapper objectMapper) {
         this(paymentRepository, userRepository, idempotencyService, gatewaySimulationService,
-                auditService, metricsService, queueManager, objectMapper, null);
+                auditService, metricsService, queueManager, objectMapper, null, null);
+    }
+
+    public PaymentProcessingServiceImpl(PaymentTransactionRepository paymentRepository,
+                                        UserRepository userRepository,
+                                        IdempotencyService idempotencyService,
+                                        GatewaySimulationService gatewaySimulationService,
+                                        AuditService auditService,
+                                        MetricsService metricsService,
+                                        DistributedQueueManager queueManager,
+                                        ObjectMapper objectMapper,
+                                        PaymentTransactionCoordinator paymentCoordinator) {
+        this(paymentRepository, userRepository, idempotencyService, gatewaySimulationService,
+                auditService, metricsService, queueManager, objectMapper, paymentCoordinator, null);
     }
 
     @Autowired
@@ -70,7 +85,8 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                                         MetricsService metricsService,
                                         DistributedQueueManager queueManager,
                                         ObjectMapper objectMapper,
-                                        @Autowired(required = false) PaymentTransactionCoordinator paymentCoordinator) {
+                                        @Autowired(required = false) PaymentTransactionCoordinator paymentCoordinator,
+                                        @Autowired(required = false) PaymentPaginationService paginationService) {
         this.paymentRepository = paymentRepository;
         this.userRepository = userRepository;
         this.idempotencyService = idempotencyService;
@@ -80,6 +96,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
         this.queueManager = queueManager;
         this.objectMapper = objectMapper;
         this.paymentCoordinator = paymentCoordinator;
+        this.paginationService = paginationService;
     }
 
     @Override
@@ -390,5 +407,15 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
         response.setUpdatedAt(tx.getUpdatedAt());
         response.setIsCachedIdempotentResponse(false);
         return response;
+    }
+
+    @Override
+    public com.paymentsystem.dto.response.PagedPaymentResponse getTransactions(
+            Integer limit, String cursor, String status, String from, String to,
+            String apiKey, String authHeader, String tenantScope) {
+        if (paginationService != null) {
+            return paginationService.getTransactions(limit, cursor, status, from, to, apiKey, authHeader, tenantScope);
+        }
+        throw new IllegalStateException("PaymentPaginationService is not configured in this context");
     }
 }

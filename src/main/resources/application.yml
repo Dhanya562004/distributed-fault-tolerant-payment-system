@@ -50,4 +50,8 @@ app:
     signature-tolerance-seconds: 300
     lease-duration-seconds: 60
     allow-private-destinations: false
-
+  pagination:
+    signing-secret: ${PAGINATION_SIGNING_SECRET:apexpay_cursor_signing_secret_dev_2026}
+    security:
+      enabled: ${PAGINATION_SECURITY_ENABLED:true}
+      api-key: ${PAGINATION_API_KEY:apexpay_admin_secret_key_2026}

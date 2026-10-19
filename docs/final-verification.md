@@ -15,32 +15,29 @@ The complete codebase was verified cleanly using Maven on Java 17 across dual st
 ```bash
 mvn clean test
 ```
-- **Total Tests Run**: 78
-- **Passed**: 78
+- **Total Tests Run**: 111
+- **Passed**: 111
 - **Failures**: 0
 - **Errors**: 0
 - **Skipped**: 0
-- **Execution Time**: ~44.1 seconds
+- **Execution Time**: ~59.6 seconds
 - **Build Outcome**: **BUILD SUCCESS**
 
 ### B. PostgreSQL 16 Testcontainers Execution (CI Pipeline)
 ```bash
 mvn test -Ppostgres-it -B
 ```
-- **Total Tests Run**: 23
-- **Passed**: 23
-- **Failures**: 0
-- **Errors**: 0
-- **Skipped**: 0
-- **Build Outcome**: **BUILD SUCCESS**
-- **Verified CI Run**: [GitHub Actions Run 39249629277](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system/actions/runs/39249629277) (All 3 Stages: Fast Tests, PostgreSQL 16 Testcontainers Suite, Application Packaging & Dashboard Verification)
+- **Total Tests**: 35 (23 Baseline Verified CI, 12 New Step 5 Suites)
+- **Status**: Ready for CI execution via GitHub Actions on Ubuntu runner.
+- **Previous Verified CI Run**: [GitHub Actions Run 39249629277](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system/actions/runs/39249629277) (Step 4 All 3 Stages Passed)
 
 ### Total Project Test Coverage
-- **Total Tests**: **101 Tests**
-- **Passed**: **101 (100% Pass Rate)**
+- **Total Tests**: **146 Tests** (111 H2 + 35 PostgreSQL)
+- **Local H2 Passed**: **111 (100% Pass Rate)**
 - **Failures**: 0
 - **Errors**: 0
 - **Skipped**: 0
+
 
 ---
 
@@ -67,6 +64,10 @@ mvn test -Ppostgres-it -B
 | **17**| `PostgreSqlIdempotencyTest` | `com.paymentsystem.postgres` | 7 | **PASSED** | Atomic key acquisition, in-progress 409 conflict, cached replay without double-charge, payload mismatch rejection, concurrent duplicate prevention, expired key reuse in PostgreSQL, and concurrent expired key race condition prevention. |
 | **18**| `PostgreSqlConcurrencyStressTest` | `com.paymentsystem.postgres` | 1 | **PASSED** | 1,000 duplicate requests against real PostgreSQL 16; 50 worker threads; exactly 1 original charge; 0 double spending. |
 | **19**| `PostgreSqlTransactionalOutboxIntegrationTest`| `com.paymentsystem.postgres` | 10 | **PASSED** | Atomicity of payment state + outbox event in PostgreSQL, rollback verification, 20-thread mutual exclusion claiming, unique event ID constraint (`idx_outbox_event_id`), state transitions, dead-letter persistence, worker lease crash recovery, concurrent distinct event claiming, concurrency idempotency, and compatibility with 24h expiry. |
+| **20**| `PaymentPaginationIntegrationTest` | `com.paymentsystem.integration` | 10 | **PASSED** | Keyset multi-page navigation, hasMore/nextCursor semantics, empty DB page, default limit 20, max limit 100, invalid limit rejection (400), malformed/tampered/filter-mismatch cursor rejection (400), equal timestamp tie-breaking by ID without duplicates, status and date range filtering, and authorization enforcement (401, 403, 200). |
+| **21**| `PaymentPaginationControllerTest` | `com.paymentsystem.controller` | 9 | **PASSED** | Spring MVC MockMvc tests for valid API key (200), missing credentials (401), invalid credentials (403), invalid limit (400), non-numeric limit (400), malformed cursor (400), tampered cursor (400), filter mismatch (400), and empty results (200). |
+| **22**| `CursorCodecServiceTest` | `com.paymentsystem.service` | 10 | **PASSED** | HMAC-SHA256 signature generation, constant-time validation, SHA-256 filter hashing, oversized input rejection, Base64 URL safety, version v1 enforcement, missing fields rejection, and invalid timestamp handling. |
+| **23**| `PostgreSqlPaginationIntegrationTest` | `com.paymentsystem.postgres` | 12 | **READY (CI)** | Keyset pagination on genuine PostgreSQL 16: first page ordering, multi-page traversal, equal timestamp tie-breaking, limit + 1 query execution without OFFSET, filtered pagination, empty results, stability under interleaved inserts, cursor tampering rejection, `pg_indexes` composite index verification, and payment/idempotency/outbox regression safety. |
 
 ---
 
@@ -94,3 +95,17 @@ mvn package -DskipTests -B
 - [x] **SSRF Hardening**: Validates destination URLs, requires HTTPS in production, and blocks private IPs and AWS metadata endpoints.
 - [x] **PostgreSQL 16 Testcontainers Suite**: 10 tests verifying genuine PostgreSQL atomicity, rollback, row-level locks, lease recovery, and unique constraints.
 
+---
+
+## 5. Step 5 Architecture & Functional Verification Checklist
+
+- [x] **Read-Only Keyset Endpoint**: `GET /api/v1/payments/transactions` supporting `limit`, `cursor`, `status`, `from`, `to`.
+- [x] **Default & Bounded Page Sizing**: Default limit 20, minimum 1, maximum 100. Values `< 1` or `> 100` rejected with HTTP 400.
+- [x] **Deterministic Keyset Ordering**: Composite ordering `createdAt DESC, id DESC` with primary key `id` acting as an exact tie-breaker for equal timestamps.
+- [x] **Opaque Cryptographic Cursors**: Versioned (`v1`), URL-safe Base64 encoded, signed with HMAC-SHA256, and bound to active query filters via SHA-256 fingerprint.
+- [x] **Constant-Time Verification**: Uses `MessageDigest.isEqual` to eliminate timing side-channel attacks on cursor signatures and credentials.
+- [x] **Filter Binding Integrity**: Cursors rejected with HTTP 400 if client alters status or date range filters between pages.
+- [x] **Zero OFFSET Execution**: Implements indexed keyset queries using `CriteriaBuilder` with bounding conditions `(createdAt < :time OR (createdAt = :time AND id < :id))` and `limit + 1` row retrieval.
+- [x] **Database Keyset Indexing**: Added `CREATE INDEX IF NOT EXISTS idx_payments_created_at_id ON payments(created_at DESC, id DESC)` in `schema.sql` and JPA `@Table`.
+- [x] **Security & Access Control**: Protected by configurable API key / Bearer token credentials (`app.pagination.security.enabled` and `api-key`). Missing credentials return 401 Unauthorized; invalid credentials return 403 Forbidden.
+- [x] **Backward Compatibility**: Preserved all existing payment initiation, lookup, idempotency replay, refund processing, and transactional outbox webhook functionalities.

@@ -161,6 +161,82 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
+    @ExceptionHandler(InvalidCursorException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCursor(InvalidCursorException ex, HttpServletRequest request) {
+        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        logger.warn("[Trace: {}] Invalid pagination cursor: {}", traceId, ex.getMessage());
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "INVALID_CURSOR",
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId,
+                List.of("Please provide a valid, untampered cursor matching current query parameters.")
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(InvalidPaginationFilterException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidPaginationFilter(InvalidPaginationFilterException ex, HttpServletRequest request) {
+        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        logger.warn("[Trace: {}] Invalid pagination filter: {}", traceId, ex.getMessage());
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "INVALID_PAGINATION_FILTER",
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId,
+                List.of()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentTypeMismatch(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        logger.warn("[Trace: {}] Method argument type mismatch on parameter '{}': {}", traceId, ex.getName(), ex.getMessage());
+        String paramType = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "valid type";
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "INVALID_PARAMETER",
+                "Invalid value '" + ex.getValue() + "' for query parameter '" + ex.getName() + "'. Expected type: " + paramType,
+                request.getRequestURI(),
+                traceId,
+                List.of("Parameter '" + ex.getName() + "' must be formatted as " + paramType)
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ErrorResponse> handleUnauthorized(UnauthorizedException ex, HttpServletRequest request) {
+        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        logger.warn("[Trace: {}] Unauthorized request: {}", traceId, ex.getMessage());
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.UNAUTHORIZED.value(),
+                "UNAUTHORIZED",
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId,
+                List.of("Please supply a valid X-Api-Key or Authorization Bearer header.")
+        );
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ErrorResponse> handleForbidden(ForbiddenException ex, HttpServletRequest request) {
+        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        logger.warn("[Trace: {}] Forbidden request: {}", traceId, ex.getMessage());
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.FORBIDDEN.value(),
+                "FORBIDDEN",
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId,
+                List.of("Access denied: insufficient permissions or invalid credentials.")
+        );
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+
     @ExceptionHandler(PaymentProcessingException.class)
     public ResponseEntity<ErrorResponse> handlePaymentProcessingError(PaymentProcessingException ex, HttpServletRequest request) {
         String traceId = UUID.randomUUID().toString().substring(0, 8);

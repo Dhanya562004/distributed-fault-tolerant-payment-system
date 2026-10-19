@@ -39,6 +39,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_payment_id ON payments(payment_id
 CREATE INDEX IF NOT EXISTS idx_payments_idempotency_key ON payments(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+CREATE INDEX IF NOT EXISTS idx_payments_created_at_id ON payments(created_at DESC, id DESC);
 
 -- 3. Idempotency Keys Table
 CREATE TABLE IF NOT EXISTS idempotency_keys (

@@ -340,3 +340,51 @@ signature = "v1=" + HmacSHA256(canonicalMessage, webhookSigningSecret)
 
 Receivers verify the signature using constant-time comparison (`MessageDigest.isEqual`) and enforce a timestamp tolerance window (default 300 seconds) to prevent replay attacks. See [docs/webhooks.md](file:///c:/Users/Deeksha/OneDrive/Desktop/distributed%20fault%20tolerant%20payment%20system/docs/webhooks.md) for full architecture and verification samples.
 
+---
+
+## 7. Cursor-Based Keyset Pagination (`GET /api/v1/payments/transactions`)
+
+Provides high-performance, deterministic keyset pagination over payment transactions using composite ordering `(createdAt DESC, id DESC)`.
+
+### 7.1 Query Parameters
+| Parameter | Default | Limits | Description |
+| :--- | :---: | :---: | :--- |
+| `limit` | `20` | `1` - `100` | Page size. Rejects `< 1` or `> 100` with HTTP 400. |
+| `cursor` | `null` | String | Opaque URL-safe Base64 cursor containing signed keyset coordinates. |
+| `status` | `null` | Enum | Filter by `PaymentStatus` (`PENDING`, `PROCESSING`, `SUCCESS`, `FAILED`). |
+| `from` | `null` | ISO-8601 UTC | Creation time lower bound inclusive (e.g. `2026-10-19T00:00:00Z`). |
+| `to` | `null` | ISO-8601 UTC | Creation time upper bound inclusive (e.g. `2026-10-19T23:59:59Z`). |
+
+### 7.2 Request Example
+```http
+GET /api/v1/payments/transactions?limit=20&status=SUCCESS HTTP/1.1
+Host: api.apexpay.com
+X-Api-Key: apexpay_admin_secret_key_2026
+```
+
+### 7.3 Response Format
+```json
+{
+  "data": [
+    {
+      "id": "PAY_98F1A2B3C4D5E6F7",
+      "paymentId": "PAY_98F1A2B3C4D5E6F7",
+      "userId": "USR_ALICE",
+      "amount": 250.0000,
+      "currency": "USD",
+      "status": "SUCCESS",
+      "paymentMethod": "CREDIT_CARD",
+      "description": "Enterprise license renewal",
+      "createdAt": "2026-10-19T14:30:00Z",
+      "updatedAt": "2026-10-19T14:30:00.025Z"
+    }
+  ],
+  "pagination": {
+    "limit": 20,
+    "hasMore": true,
+    "nextCursor": "eyJ2IjoidjEiLCJjIjoiMjAyNi0xMC0xOVQxNDozMDowMFoiLCJpZCI6NDIsImZoIjoiYTM0Yi4uLiIsInNpZyI6IjdlOTEuLi4ifQ"
+  }
+}
+```
+
+Full specification and security model: [docs/pagination.md](file:///c:/Users/Deeksha/OneDrive/Desktop/distributed%20fault%20tolerant%20payment%20system/docs/pagination.md).

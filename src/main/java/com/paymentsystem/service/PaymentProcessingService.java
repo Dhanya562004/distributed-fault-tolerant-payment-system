@@ -17,4 +17,7 @@ public interface PaymentProcessingService {
     List<PaymentResponse> getPaymentsByUser(String userId);
     List<PaymentResponse> getPaymentsByUser(String userId, int page, int size);
     PaymentResponse mapToResponse(PaymentTransaction tx);
+    com.paymentsystem.dto.response.PagedPaymentResponse getTransactions(
+            Integer limit, String cursor, String status, String from, String to,
+            String apiKey, String authHeader, String tenantScope);
 }

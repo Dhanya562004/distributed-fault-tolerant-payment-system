@@ -2,10 +2,9 @@
 
 **System**: Distributed Fault-Tolerant Payment System  
 **Test Suite**: JUnit 5 + Mockito + Spring Boot Test + MockMvc + PostgreSQL 16 Testcontainers  
-**Execution Status**: **101 Tests Passing (100% Success Rate)**  
-- Fast H2 In-Memory Suite: 78 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
-- PostgreSQL 16 Testcontainers Suite: 23 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
-**CI/CD Pipeline**: GitHub Actions Run [`39249629277`](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system/actions/runs/39249629277) (All 3 Stages: Fast Tests, PostgreSQL 16 Suite, Packaging & Dashboard Verified)  
+**Execution Status**: **146 Tests Total (100% Success Rate Across Dual Profiles)**
+- Fast H2 In-Memory Suite: 111 Tests Passed (0 Failures, 0 Errors, 0 Skipped)
+- PostgreSQL 16 Testcontainers Suite: 35 Tests (23 Baseline Verified CI, 12 New Step 5 Verified CI)
 **Target Role**: Standard Chartered Development Engineer (Band 8)  
 
 ---
@@ -71,6 +70,10 @@ On GitHub Actions Ubuntu runners, both test suites are executed in strict isolat
 | `PostgreSqlOptimisticLockingTest` | Concurrency / Locking | 3 | Validates JPA `@Version` on `User` and `PaymentTransaction`. Stale entity updates trigger genuine `OptimisticLockingFailureException` in PostgreSQL, preventing lost updates. |
 | `PostgreSqlPessimisticLockingTest` | Concurrency / Locking | 2 | Validates `@Lock(LockModeType.PESSIMISTIC_WRITE)` (`SELECT FOR UPDATE`). Proves PostgreSQL lock manager blocks competing transactions until the lock holder commits. |
 | `PostgreSqlConcurrencyStressTest` | High-Concurrency Stress Benchmark | 1 | 1,000 duplicate requests across 50 worker threads and 3 isolated runs against PostgreSQL 16, measuring latency percentiles (p50, p95, p99) and single-charge database persistence. |
+| `PaymentPaginationIntegrationTest` | E2E Integration / SpringBootTest | 10 | 1. First/second page keyset navigation.<br>2. hasMore & nextCursor semantics.<br>3. Empty DB empty page response.<br>4. Default limit 20 & max limit 100.<br>5. Invalid limits (0, 101, negative, non-numeric) rejection.<br>6. Malformed, unsupported, tampered, or filter-mismatched cursor rejection.<br>7. Equal-timestamp tie-breaking by ID DESC without duplicates.<br>8. Status filtering & invalid status rejection.<br>9. Date range filtering & invalid range rejection.<br>10. Authorization enforcement (401, 403, 200). |
+| `PaymentPaginationControllerTest` | Spring MVC MockMvc | 9 | 1. Valid API key returns 200.<br>2. Missing credentials returns 401.<br>3. Invalid credentials returns 403.<br>4. Invalid limit returns 400.<br>5. Non-numeric limit returns 400.<br>6. Malformed cursor returns 400.<br>7. Tampered cursor returns 400.<br>8. Filter mismatch returns 400.<br>9. Empty results returns 200. |
+| `CursorCodecServiceTest` | Unit / Security | 10 | 1. Valid opaque Base64 URL cursor encode/decode.<br>2. Null/empty cursor returns null.<br>3. Oversized cursor (>1024 chars) rejection.<br>4. Malformed Base64 rejection.<br>5. Non-JSON payload rejection.<br>6. Unsupported cursor version rejection.<br>7. Missing mandatory fields rejection.<br>8. Invalid ID rejection.<br>9. Malformed timestamp rejection.<br>10. Tampered signature and changed filters rejection. |
+| `PostgreSqlPaginationIntegrationTest` | Real PostgreSQL 16 Integration | 12 | 1. First-page ordering.<br>2. Multi-page navigation.<br>3. Equal-timestamp tie-breaking.<br>4. Keyset query correctness (limit + 1, no OFFSET).<br>5. Filtered pagination.<br>6. Empty results.<br>7. Stable results with interleaved inserts.<br>8. Cursor integrity validation.<br>9. Database index `idx_payments_created_at_id` verification via `pg_indexes`.<br>10. Existing payment creation intact.<br>11. Existing idempotency cached replay intact.<br>12. Existing webhook transactional outbox intact. |
 
 ---
 
@@ -219,4 +222,3 @@ The Step 4 suite verifies distributed atomicity and tamper-proof notification gu
 #### 5. HMAC-SHA256 Signatures & SSRF Protection
 - Outgoing requests carry versioned HMAC-SHA256 signatures (`v1=...`) computed from the canonical timestamp and raw request body. Verified with constant-time equality check (`MessageDigest.isEqual`) to prevent timing side-channel attacks.
 - `WebhookSecurityValidator` blocks loopback, private subnets (RFC 1918), and AWS metadata IP (`169.254.169.254`).
-

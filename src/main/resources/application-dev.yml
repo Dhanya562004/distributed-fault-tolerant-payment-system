@@ -34,4 +34,8 @@ logging:
 app:
   webhook:
     allow-private-destinations: true
-
+  pagination:
+    signing-secret: apexpay_cursor_signing_secret_dev_2026
+    security:
+      enabled: true
+      api-key: apexpay_admin_secret_key_2026

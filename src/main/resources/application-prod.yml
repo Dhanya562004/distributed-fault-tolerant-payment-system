@@ -28,4 +28,8 @@ logging:
 app:
   webhook:
     allow-private-destinations: false
-
+  pagination:
+    signing-secret: ${PAGINATION_SIGNING_SECRET:}
+    security:
+      enabled: ${PAGINATION_SECURITY_ENABLED:true}
+      api-key: ${PAGINATION_API_KEY:}

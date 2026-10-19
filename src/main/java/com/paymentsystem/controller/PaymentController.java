@@ -55,6 +55,22 @@ public class PaymentController {
         return builder.body(response);
     }
 
+    @GetMapping("/transactions")
+    @Operation(summary = "List Transactions (Keyset Pagination)", description = "Retrieves payment transactions using deterministic keyset pagination with signed cursor validation and status/date filtering")
+    public ResponseEntity<com.paymentsystem.dto.response.PagedPaymentResponse> getTransactions(
+            @RequestParam(defaultValue = "20") Integer limit,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestHeader(value = "X-Api-Key", required = false) String apiKey,
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId) {
+        com.paymentsystem.dto.response.PagedPaymentResponse response = paymentProcessingService.getTransactions(
+                limit, cursor, status, from, to, apiKey, authorization, tenantId);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/{paymentId}")
     @Operation(summary = "Fetch Payment Status", description = "Retrieves payment transaction record by paymentId")
     public ResponseEntity<PaymentResponse> getPaymentStatus(@PathVariable String paymentId) {
