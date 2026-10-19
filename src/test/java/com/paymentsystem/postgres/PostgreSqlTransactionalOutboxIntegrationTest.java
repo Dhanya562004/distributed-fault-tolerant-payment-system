@@ -207,7 +207,7 @@ public class PostgreSqlTransactionalOutboxIntegrationTest extends AbstractPostgr
         event.setAttemptCount(2); // next retry will be 3rd (max)
         event = outboxEventRepository.saveAndFlush(event);
 
-        outboxWorker.recordDeliveryResult(event.getId(), DeliveryResult.retryableFailure(503, "Service Unavailable"));
+        outboxWorker.recordDeliveryResult(event.getId(), DeliveryResult.retryableFailure(503, "HTTP 503: Service Unavailable"));
 
         OutboxEvent deadEvent = outboxEventRepository.findById(event.getId()).orElseThrow();
         assertEquals(OutboxStatus.DEAD_LETTER, deadEvent.getStatus());

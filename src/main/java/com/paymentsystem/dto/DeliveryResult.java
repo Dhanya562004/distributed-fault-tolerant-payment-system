@@ -24,7 +24,10 @@ public class DeliveryResult {
     }
 
     public static DeliveryResult retryableFailure(int statusCode, String errorMessage) {
-        return new DeliveryResult(false, true, statusCode, null, errorMessage);
+        String msg = (statusCode > 0 && errorMessage != null && !errorMessage.contains(String.valueOf(statusCode)))
+                ? "HTTP " + statusCode + ": " + errorMessage
+                : errorMessage;
+        return new DeliveryResult(false, true, statusCode, null, msg);
     }
 
     public static DeliveryResult permanentFailure(String errorMessage) {
