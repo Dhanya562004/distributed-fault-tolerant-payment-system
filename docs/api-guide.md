@@ -1,9 +1,11 @@
 # REST API Specification & Developer Guide
 
-**Project**: Distributed Fault-Tolerant Payment System  
-**Base URL**: `http://localhost:8080`  
-**OpenAPI / Swagger UI**: `http://localhost:8080/swagger-ui.html`  
-**OpenAPI JSON Specification**: `http://localhost:8080/v3/api-docs`  
+**Project**: ApexPay — Distributed Fault-Tolerant Payment Engine  
+**Live Cloud Base URL**: `https://apexpay-backend-sc5s.onrender.com`  
+**Live Swagger UI**: [`https://apexpay-backend-sc5s.onrender.com/swagger-ui.html`](https://apexpay-backend-sc5s.onrender.com/swagger-ui.html)  
+**Live OpenAPI JSON**: [`https://apexpay-backend-sc5s.onrender.com/v3/api-docs`](https://apexpay-backend-sc5s.onrender.com/v3/api-docs)  
+**Local Development Base URL**: `http://localhost:8080`  
+**Quick Reference**: See also [REST API Cloud Reference](api.md) for endpoint testing safety rules and authentication guides.  
 
 ---
 
@@ -338,7 +340,7 @@ canonicalMessage = timestampHeader + "." + rawRequestBodyUtf8
 signature = "v1=" + HmacSHA256(canonicalMessage, webhookSigningSecret)
 ```
 
-Receivers verify the signature using constant-time comparison (`MessageDigest.isEqual`) and enforce a timestamp tolerance window (default 300 seconds) to prevent replay attacks. See [docs/webhooks.md](file:///c:/Users/Deeksha/OneDrive/Desktop/distributed%20fault%20tolerant%20payment%20system/docs/webhooks.md) for full architecture and verification samples.
+Receivers verify the signature using constant-time comparison (`MessageDigest.isEqual`) and enforce a timestamp tolerance window (default 300 seconds) to prevent replay attacks. See [Webhook Specification](webhooks.md) for full architecture and verification samples.
 
 ---
 
@@ -387,4 +389,4 @@ X-Api-Key: apexpay_admin_secret_key_2026
 }
 ```
 
-Full specification and security model: [docs/pagination.md](file:///c:/Users/Deeksha/OneDrive/Desktop/distributed%20fault%20tolerant%20payment%20system/docs/pagination.md).
+Full specification and security model: [Pagination Specification](pagination.md).

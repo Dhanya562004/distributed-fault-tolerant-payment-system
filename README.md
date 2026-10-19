@@ -24,14 +24,20 @@
 
 ---
 
-## 🌟 Instant Cloud Live Deployment
+## Instant Cloud Live Deployment
 
-| Service | Endpoint / Link | Status & Purpose |
+| Service | Live Link | Purpose |
 | :--- | :--- | :--- |
-| 🖥️ **Streamlit Cloud Dashboard** | [distributed-fault-tolerant-payment-system.streamlit.app](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/) | **Live Interactive Control Room** with real-time KPI metrics, forensic transaction inspector, and fault injection lab. |
-| ⚡ **Render Production Microservice** | [`https://apexpay-backend-sc5s.onrender.com`](https://apexpay-backend-sc5s.onrender.com/actuator/health) | **High-Throughput Spring Boot 3.3 Cluster** with Actuator health, partitioned workers, and in-memory/Postgres persistence. |
-| 📖 **Swagger OpenAPI 3.0 Interactive Docs** | [`https://apexpay-backend-sc5s.onrender.com/swagger-ui.html`](https://apexpay-backend-sc5s.onrender.com/swagger-ui.html) | Direct interactive browser interface for executing live payment and refund REST API payloads. |
-| 📊 **Live Telemetry Actuator** | [`/api/v1/metrics`](https://apexpay-backend-sc5s.onrender.com/api/v1/metrics) | Real-time Micrometer/Prometheus telemetry stream tracking throughput, retries, latency, and idempotency hits. |
+| Live Streamlit Dashboard | [https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/) | Interactive control room featuring KPI metrics, transaction inspection, and fault injection. |
+| Spring Boot Backend | [https://apexpay-backend-sc5s.onrender.com](https://apexpay-backend-sc5s.onrender.com) ([Health: `/actuator/health`](https://apexpay-backend-sc5s.onrender.com/actuator/health)) | Deployed Spring Boot payment processing API. |
+| Swagger OpenAPI Documentation | [https://apexpay-backend-sc5s.onrender.com/swagger-ui.html](https://apexpay-backend-sc5s.onrender.com/swagger-ui.html) | Interactive documentation for implemented REST APIs. |
+| Live Telemetry | [https://apexpay-backend-sc5s.onrender.com/api/v1/metrics](https://apexpay-backend-sc5s.onrender.com/api/v1/metrics) | Application monitoring and operational metrics. |
+| GitHub Repository | [https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system) | Source code, architecture, tests, documentation, and GitHub Actions CI/CD. |
+
+> **Deployment Verification Note**:
+> - **Backend Persistence**: Verified live on Render using embedded **H2 database** (PostgreSQL compatibility mode). Production PostgreSQL profile is configured in `application-prod.yml` and rigorously verified in CI via PostgreSQL 16 Testcontainers.
+> - **Telemetry & Health**: Live Actuator health (`/actuator/health`) reports `{"status":"UP"}` with database and liveness/readiness indicators. Application metrics (`/api/v1/metrics`) expose live transaction, retry, DLQ, and latency counters.
+> - **Cold-Start Behavior**: Render free-tier instances spin down after 15 minutes of inactivity; first request may require 30–60 seconds for JVM startup.
 
 ---
 
@@ -296,7 +302,9 @@ The test suite validates correctness under heavy contention and failure scenario
 | 📄 **[Keyset Pagination Specification](docs/pagination.md)** | Production keyset cursor pagination with composite ordering, HMAC-SHA256 signatures, filter binding, and $O(\log N + K)$ index seek optimization. |
 | 🛡️ **[Code Review & Security Audit](docs/code-review.md)** | Technical code review, security audit, concurrency verification, and production readiness assessment. |
 | ⚖️ **[Architectural Decision Records (ADRs)](docs/design-decisions.md)** | Rationale for SHA-256 payload digests, fail-fast error classification, and polyglot storage. |
-| 🔌 **[REST API Guide](docs/api-guide.md)** | Complete HTTP endpoints, OpenAPI 3.0 schemas, headers, pagination, and error responses. |
+| 🔌 **[REST API Specification](docs/api.md)** / **[API Guide](docs/api-guide.md)** | Live cloud endpoints, OpenAPI 3.0 schemas, authentication requirements, and safe test instructions. |
+| 🚀 **[Production Readiness](docs/production-readiness.md)** | Cloud deployment architecture, free-tier limits, security review, and persistence configuration. |
+| 💼 **[Resume & Interview Guide](docs/resume-and-interview.md)** / **[Interview Prep](docs/interview-preparation.md)** | Stripe-focused resume project bullets, live cloud deployment links, and architectural interview Q&A. |
 | 🧪 **[Test Strategy & Verification](docs/testing.md)** | Verification evidence for 153 automated tests (118 Fast H2 + 35 PostgreSQL 16 Testcontainers), concurrency stress benchmarks, and locking mechanisms. |
 | 🎯 **[Technical Interview Preparation](docs/interview-preparation.md)** | 14 rigorous interview questions and concise code-backed architectural explanations. |
 | 📝 **[Initial Codebase Audit](docs/initial-audit.md)** | Forensic analysis of baseline code, identified edge cases, and upgrade roadmap. |

@@ -20,7 +20,86 @@ The core engineering requirements dictate:
 
 ---
 
-## 2. High-Level Architecture Diagram
+## 2. Cloud Deployment Architecture
+
+The following diagram illustrates the verified live cloud topology across Streamlit Cloud, Render Web Services, and persistence/worker subsystems:
+
+```
+                          +-------------------------+
+                          |     User / Recruiter    |
+                          +-------------------------+
+                                       |
+                                       | HTTPS
+                                       v
+                    +-------------------------------------+
+                    |      Streamlit Cloud Dashboard      |
+                    | (Python 3.11 / Interactive UI /     |
+                    |  Forensics & Chaos Simulation Lab)  |
+                    +-------------------------------------+
+                                       |
+                                       | Outbound REST / HTTPS
+                                       v
+          +---------------------------------------------------------+
+          |               Render Spring Boot Backend                |
+          |           (Java 17 / Spring Boot 3.3.4 / Alpine)        |
+          |                                                         |
+          |  +--------------------+         +--------------------+  |
+          |  |  Swagger OpenAPI   |         |    Spring Boot     |  |
+          |  |  Documentation     |         |      Actuator      |  |
+          |  | (/swagger-ui.html) |         | (/actuator/health) |  |
+          |  +--------------------+         +--------------------+  |
+          |                                                         |
+          |  +--------------------+         +--------------------+  |
+          |  |   Live Telemetry   |         |    Transactional   |  |
+          |  |   REST Endpoint    |         |        Outbox      |  |
+          |  |  (/api/v1/metrics) |         |    (outbox_events) |  |
+          |  +--------------------+         +--------------------+  |
+          |                                           |             |
+          |                                           v             |
+          |                                 +--------------------+  |
+          |                                 |  Webhook Delivery  |  |
+          |                                 |       Worker       |  |
+          |                                 | (HMAC-SHA256 Sign) |  |
+          |                                 +--------------------+  |
+          +---------------------------------------------------------+
+                                       |
+                                       | JDBC Connection Pool
+                                       v
+                    +-------------------------------------+
+                    |    Configured Persistence Layer     |
+                    |                                     |
+                    | [Live Deployment: In-Memory H2 DB]  |
+                    |  (PostgreSQL Compatibility Mode)    |
+                    |                                     |
+                    | [Enterprise Prod: PostgreSQL 16 DB] |
+                    |  (Configured in application-prod)   |
+                    +-------------------------------------+
+```
+
+### Verified Cloud Components & Network Topology:
+
+1. **User / Recruiter**:
+   - Accesses the public Streamlit Cloud Dashboard via modern web browser over TLS 1.3.
+2. **Streamlit Cloud Dashboard (`https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/`)**:
+   - Hosted on Streamlit Community Cloud (Python 3.11).
+   - In Auto-Detect / Live mode, continuously polls `https://apexpay-backend-sc5s.onrender.com/actuator/health` to confirm backend readiness.
+   - Forwards transaction submissions (`POST /api/v1/payments`) with client-generated `X-Idempotency-Key` headers, refund triggers (`POST /api/v1/refunds`), fault injection configs (`POST /api/v1/simulation/config`), and queries telemetry (`GET /api/v1/metrics`).
+   - If the backend is cold-starting or unavailable, falls back gracefully to in-memory visual simulation mode without throwing unhandled exceptions.
+3. **Render Spring Boot Microservice (`https://apexpay-backend-sc5s.onrender.com`)**:
+   - Hosted on Render Free Web Service (Docker container: `eclipse-temurin:17-jre-alpine`, non-root user `appuser`, EXPOSE 8080).
+   - **Swagger OpenAPI Documentation**: Available at `/swagger-ui.html` (redirecting to `/swagger-ui/index.html` with OpenAPI 3.0 spec at `/v3/api-docs`). Exposes all live endpoints for interactive API exploration.
+   - **Spring Boot Actuator**: Health endpoint exposed at `/actuator/health`. Live response confirms `"status": "UP"` with database connectivity, disk space, and liveness/readiness groups.
+   - **Live Telemetry Engine**: Exposed at `/api/v1/metrics` (and `/metrics`), streaming live transaction volume, success rates, retry counts, DLQ depths, and status breakdowns.
+   - **Transactional Outbox Engine**: Transactional events (`PAYMENT_AUTHORIZED`, `PAYMENT_FAILED_DLQ`, `REFUND_PROCESSED`) are committed atomically within the same database transaction into `outbox_events`.
+   - **Webhook Delivery Worker**: Scheduled background runner (`WebhookDeliveryWorker`) executes polling loops against `outbox_events` (`WHERE status = 'PENDING'`), acquires lease locks, signs JSON payloads with HMAC-SHA256 (`X-ApexPay-Signature`), and transmits webhooks with exponential backoff and jitter.
+4. **Configured Persistence Layer**:
+   - **Live Render Cloud Deployment**: Operates with embedded **H2 in-memory database** (`jdbc:h2:mem:payments_db;DB_CLOSE_DELAY=-1;MODE=PostgreSQL`) under the default `dev` Spring profile. Validated via `GET /actuator/health` which explicitly reports `"database": "H2"`.
+   - **Production Enterprise Profile (`application-prod.yml`)**: Configured for external managed PostgreSQL 16 (`jdbc:postgresql://${SPRING_DATASOURCE_URL}`) with HikariCP connection pooling, PostgreSQL dialect, and MongoDB audit store.
+   - **CI/CD Quality Gate**: 100% verified against authentic PostgreSQL 16 using Testcontainers in GitHub Actions Stage B (35 tests covering row-level locking, MVCC, and 1,000-request concurrency stress benchmarks).
+
+---
+
+## 3. High-Level Distributed Architecture Diagram
 
 ```mermaid
 flowchart TD
@@ -82,7 +161,7 @@ flowchart TD
 
 ---
 
-## 3. Core Subsystems
+## 4. Core Subsystems
 
 ### 3.1 Idempotency Engine & Concurrency Control
 
