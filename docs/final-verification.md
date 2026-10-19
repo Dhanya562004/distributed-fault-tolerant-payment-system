@@ -28,8 +28,8 @@ mvn clean test
 mvn test -Ppostgres-it -B
 ```
 - **Total Tests**: 35 (23 Baseline Verified CI, 12 New Step 5 Suites)
-- **Status**: Ready for CI execution via GitHub Actions on Ubuntu runner.
-- **Previous Verified CI Run**: [GitHub Actions Run 39249629277](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system/actions/runs/39249629277) (Step 4 All 3 Stages Passed)
+- **Status**: Verified in CI Pipeline (100% Pass Rate Across All 3 Stages).
+- **Verified CI Run**: [GitHub Actions Run 39263927415](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system/actions/runs/39263927415) (Step 5 All 3 Stages Passed)
 
 ### Total Project Test Coverage
 - **Total Tests**: **146 Tests** (111 H2 + 35 PostgreSQL)
@@ -41,7 +41,7 @@ mvn test -Ppostgres-it -B
 
 ---
 
-## 2. Test Suite Breakdown (101 Tests Total)
+## 2. Test Suite Breakdown (146 Tests Total across 23 Suites)
 
 | # | Test Class | Package | Tests Run | Result | Key Verified Assertions |
 | :-: | :--- | :--- | :-: | :-: | :--- |
@@ -67,7 +67,7 @@ mvn test -Ppostgres-it -B
 | **20**| `PaymentPaginationIntegrationTest` | `com.paymentsystem.integration` | 10 | **PASSED** | Keyset multi-page navigation, hasMore/nextCursor semantics, empty DB page, default limit 20, max limit 100, invalid limit rejection (400), malformed/tampered/filter-mismatch cursor rejection (400), equal timestamp tie-breaking by ID without duplicates, status and date range filtering, and authorization enforcement (401, 403, 200). |
 | **21**| `PaymentPaginationControllerTest` | `com.paymentsystem.controller` | 9 | **PASSED** | Spring MVC MockMvc tests for valid API key (200), missing credentials (401), invalid credentials (403), invalid limit (400), non-numeric limit (400), malformed cursor (400), tampered cursor (400), filter mismatch (400), and empty results (200). |
 | **22**| `CursorCodecServiceTest` | `com.paymentsystem.service` | 10 | **PASSED** | HMAC-SHA256 signature generation, constant-time validation, SHA-256 filter hashing, oversized input rejection, Base64 URL safety, version v1 enforcement, missing fields rejection, and invalid timestamp handling. |
-| **23**| `PostgreSqlPaginationIntegrationTest` | `com.paymentsystem.postgres` | 12 | **READY (CI)** | Keyset pagination on genuine PostgreSQL 16: first page ordering, multi-page traversal, equal timestamp tie-breaking, limit + 1 query execution without OFFSET, filtered pagination, empty results, stability under interleaved inserts, cursor tampering rejection, `pg_indexes` composite index verification, and payment/idempotency/outbox regression safety. |
+| **23**| `PostgreSqlPaginationIntegrationTest` | `com.paymentsystem.postgres` | 12 | **PASSED (CI)** | Keyset pagination on genuine PostgreSQL 16: first page ordering, multi-page traversal, equal timestamp tie-breaking, limit + 1 query execution without OFFSET, filtered pagination, empty results, stability under interleaved inserts, cursor tampering rejection, `pg_indexes` composite index verification, and payment/idempotency/outbox regression safety. |
 
 ---
 

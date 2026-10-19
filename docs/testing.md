@@ -31,8 +31,8 @@ pie title Test Suite Distribution (101 Tests Total)
 ### Local Fast Execution (Docker-Free)
 Running `mvn clean test` across the complete project locally on any developer machine (including Windows without Docker Desktop) produces:
 
-- **Total Tests Executed**: 78
-- **Passed**: 78
+- **Total Tests Executed**: 111
+- **Passed**: 111
 - **Failures**: 0
 - **Errors**: 0
 - **Skipped**: 0
@@ -40,10 +40,11 @@ Running `mvn clean test` across the complete project locally on any developer ma
 
 ### Dual-Stage GitHub Actions Execution (CI/CD)
 On GitHub Actions Ubuntu runners, both test suites are executed in strict isolation:
-- **Stage A (Fast H2 Suite)**: `mvn clean test -B` (78 passed)
-- **Stage B (PostgreSQL 16 Suite)**: `mvn test -Ppostgres-it -B` (23 passed)
+- **Stage A (Fast H2 Suite)**: `mvn clean test -B` (111 passed)
+- **Stage B (PostgreSQL 16 Suite)**: `mvn test -Ppostgres-it -B` (35 passed)
 - **Stage C (Packaging & Dashboard)**: JAR packaged and Streamlit validated
-- **Overall Result**: **101 Tests Run, 101 Passed, 0 Failures, 0 Errors**
+- **Overall Result**: **146 Tests Run, 146 Passed, 0 Failures, 0 Errors**
+- **Verified CI Run**: [GitHub Actions Run 39263927415](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system/actions/runs/39263927415) (All 3 Stages Passed)
 
 ---
 

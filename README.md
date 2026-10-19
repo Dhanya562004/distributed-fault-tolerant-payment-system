@@ -257,8 +257,8 @@ The test suite validates correctness under heavy contention and failure scenario
     - **Service-Level Benchmark**: Invokes `PaymentProcessingService.initiatePayment()` directly in-process; does not measure HTTP/Tomcat serialization or network overhead.
 - **PostgreSQL 16 Testcontainers Integration & Locking Suite (`com.paymentsystem.postgres.*`)**:
   - **Why Real PostgreSQL Testing**: In-memory H2 emulates PostgreSQL syntax but uses different concurrency semantics, table-level/coarse locking, and zero network socket I/O. Real PostgreSQL 16 testing via Testcontainers validates authentic multi-version concurrency control (MVCC), row-level locks, and transaction isolation.
-  - **Docker-Free Local Development**: The local test suite (`mvn clean test`) excludes Testcontainers and runs the 38 fast H2 tests in ~3 seconds with zero Docker requirement.
-  - **GitHub Actions Execution**: Automated 2-stage CI pipeline executes fast H2 tests first (Stage A) followed by the PostgreSQL 16 Testcontainers suite on Ubuntu runners with Docker pre-installed (Stage B).
+  - **Docker-Free Local Development**: The local test suite (`mvn clean test`) excludes Testcontainers and runs the 111 fast H2 tests with zero Docker requirement.
+  - **GitHub Actions Execution**: Automated 3-stage CI pipeline executes fast H2 tests first (Stage A, 111 tests) followed by the PostgreSQL 16 Testcontainers suite on Ubuntu runners with Docker pre-installed (Stage B, 35 tests) and application packaging & dashboard verification (Stage C). Verified: [GitHub Actions Run 39263927415](https://github.com/Dhanya562004/distributed-fault-tolerant-payment-system/actions/runs/39263927415) (146/146 tests passing across all 3 stages).
   - **PostgreSQL Test Suites**:
     1. **Idempotency & Replay Invariants (`PostgreSqlIdempotencyTest`)**:
        - Validates atomic insert on unique constraint, in-progress HTTP 409 conflict, cached replay return, payload mismatch rejection, and concurrent duplicate prevention.
