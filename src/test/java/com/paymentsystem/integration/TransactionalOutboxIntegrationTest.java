@@ -64,8 +64,10 @@ public class TransactionalOutboxIntegrationTest {
     private WebhookHttpClient httpClient;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         outboxEventRepository.deleteAll();
+        when(httpClient.send(any(), any(), any()))
+                .thenReturn(new WebhookHttpClient.WebhookHttpResponse(200, "{\"ok\":true}"));
     }
 
     @Test

@@ -136,6 +136,10 @@ public class WebhookDeliveryService {
 
         try {
             WebhookHttpClient.WebhookHttpResponse response = httpClient.send(targetUrl, headers, event.getPayload());
+            if (response == null) {
+                logger.error("[OUTBOX PERMANENT FAILURE] HTTP client returned null response for event {}", event.getEventId());
+                return DeliveryResult.permanentFailure("HTTP client returned null response");
+            }
             int statusCode = response.getStatusCode();
 
             if (statusCode >= 200 && statusCode < 300) {

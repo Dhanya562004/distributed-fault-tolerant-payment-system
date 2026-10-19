@@ -7,9 +7,11 @@ import com.paymentsystem.entity.OutboxEvent;
 import com.paymentsystem.entity.OutboxStatus;
 import com.paymentsystem.entity.PaymentStatus;
 import com.paymentsystem.entity.PaymentTransaction;
+import com.paymentsystem.entity.User;
 import com.paymentsystem.repository.IdempotencyKeyRepository;
 import com.paymentsystem.repository.OutboxEventRepository;
 import com.paymentsystem.repository.PaymentTransactionRepository;
+import com.paymentsystem.repository.UserRepository;
 import com.paymentsystem.service.PaymentTransactionCoordinator;
 import com.paymentsystem.worker.OutboxDeliveryWorker;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +48,9 @@ public class PostgreSqlTransactionalOutboxIntegrationTest extends AbstractPostgr
     private IdempotencyKeyRepository idempotencyKeyRepository;
 
     @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
     private PaymentTransactionCoordinator paymentCoordinator;
 
     @Autowired
@@ -61,6 +66,12 @@ public class PostgreSqlTransactionalOutboxIntegrationTest extends AbstractPostgr
         txTemplate = new TransactionTemplate(transactionManager);
         outboxEventRepository.deleteAll();
         paymentRepository.deleteAll();
+
+        // Seed users to satisfy foreign key constraints fk_payments_user in PostgreSQL
+        userRepository.findByUserCode("USR_ALICE").orElseGet(() ->
+                userRepository.saveAndFlush(new User("USR_ALICE", "Alice", "alice@pg.test", new BigDecimal("1000.0000"))));
+        userRepository.findByUserCode("USR_BOB").orElseGet(() ->
+                userRepository.saveAndFlush(new User("USR_BOB", "Bob", "bob@pg.test", new BigDecimal("1000.0000"))));
     }
 
     @Test
@@ -128,8 +139,9 @@ public class PostgreSqlTransactionalOutboxIntegrationTest extends AbstractPostgr
                     startLatch.await();
                     Instant now = Instant.now();
                     Instant leaseUntil = now.plusSeconds(60);
-                    int updated = outboxEventRepository.claimEvent(eventId, workerId, leaseUntil, now, OutboxStatus.PROCESSING);
-                    if (updated == 1) {
+                    Integer updated = txTemplate.execute(status ->
+                            outboxEventRepository.claimEvent(eventId, workerId, leaseUntil, now, OutboxStatus.PROCESSING));
+                    if (updated != null && updated == 1) {
                         successClaims.incrementAndGet();
                     }
                 } catch (Exception ignored) {
@@ -165,20 +177,23 @@ public class PostgreSqlTransactionalOutboxIntegrationTest extends AbstractPostgr
         OutboxEvent event = new OutboxEvent("evt_trans_1", "payment.succeeded", "PAY_TRANS_1", "{}", 5, Instant.now());
         event = outboxEventRepository.saveAndFlush(event);
         assertEquals(OutboxStatus.PENDING, event.getStatus());
+        final Long eventId = event.getId();
 
-        // Worker claims -> PROCESSING
+        // Worker claims -> PROCESSING inside short transaction
         Instant now = Instant.now();
-        int claimed = outboxEventRepository.claimEvent(event.getId(), "worker-trans", now.plusSeconds(60), now, OutboxStatus.PROCESSING);
+        Integer claimed = txTemplate.execute(status ->
+                outboxEventRepository.claimEvent(eventId, "worker-trans", now.plusSeconds(60), now, OutboxStatus.PROCESSING));
+        assertNotNull(claimed);
         assertEquals(1, claimed);
 
-        OutboxEvent processingEvent = outboxEventRepository.findById(event.getId()).orElseThrow();
+        OutboxEvent processingEvent = outboxEventRepository.findById(eventId).orElseThrow();
         assertEquals(OutboxStatus.PROCESSING, processingEvent.getStatus());
         assertEquals("worker-trans", processingEvent.getLeaseOwner());
 
         // Delivery successful -> DELIVERED
-        outboxWorker.recordDeliveryResult(event.getId(), DeliveryResult.success(200, "{\"ok\":true}"));
+        outboxWorker.recordDeliveryResult(eventId, DeliveryResult.success(200, "{\"ok\":true}"));
 
-        OutboxEvent deliveredEvent = outboxEventRepository.findById(event.getId()).orElseThrow();
+        OutboxEvent deliveredEvent = outboxEventRepository.findById(eventId).orElseThrow();
         assertEquals(OutboxStatus.DELIVERED, deliveredEvent.getStatus());
         assertNotNull(deliveredEvent.getDeliveredAt());
         assertNull(deliveredEvent.getLeaseOwner());
@@ -209,16 +224,19 @@ public class PostgreSqlTransactionalOutboxIntegrationTest extends AbstractPostgr
         event.setLeaseOwner("crashed-worker-999");
         event.setLockedUntil(Instant.now().minusSeconds(10));
         event = outboxEventRepository.saveAndFlush(event);
+        final Long eventId = event.getId();
 
         // Active worker finds candidate events: expired lease is included!
         List<Long> candidates = outboxEventRepository.findCandidateEventIds(Instant.now(), PageRequest.of(0, 10));
-        assertTrue(candidates.contains(event.getId()), "Expired worker lease must be surfaced as a claim candidate in PostgreSQL");
+        assertTrue(candidates.contains(eventId), "Expired worker lease must be surfaced as a claim candidate in PostgreSQL");
 
-        // New worker claims event
-        int claimed = outboxEventRepository.claimEvent(event.getId(), "recovery-worker", Instant.now().plusSeconds(60), Instant.now(), OutboxStatus.PROCESSING);
+        // New worker claims event inside short transaction
+        Integer claimed = txTemplate.execute(status ->
+                outboxEventRepository.claimEvent(eventId, "recovery-worker", Instant.now().plusSeconds(60), Instant.now(), OutboxStatus.PROCESSING));
+        assertNotNull(claimed);
         assertEquals(1, claimed);
 
-        OutboxEvent recovered = outboxEventRepository.findById(event.getId()).orElseThrow();
+        OutboxEvent recovered = outboxEventRepository.findById(eventId).orElseThrow();
         assertEquals("recovery-worker", recovered.getLeaseOwner());
     }
 
@@ -241,8 +259,9 @@ public class PostgreSqlTransactionalOutboxIntegrationTest extends AbstractPostgr
                 try {
                     String workerId = "worker-" + Thread.currentThread().getName();
                     Instant now = Instant.now();
-                    int claimed = outboxEventRepository.claimEvent(id, workerId, now.plusSeconds(30), now, OutboxStatus.PROCESSING);
-                    if (claimed == 1) {
+                    Integer claimed = txTemplate.execute(status ->
+                            outboxEventRepository.claimEvent(id, workerId, now.plusSeconds(30), now, OutboxStatus.PROCESSING));
+                    if (claimed != null && claimed == 1) {
                         processedIds.add(id);
                     }
                 } finally {
@@ -300,8 +319,10 @@ public class PostgreSqlTransactionalOutboxIntegrationTest extends AbstractPostgr
         expiredRecord.setStatus(IdempotencyKeyRecord.Status.COMPLETED);
         idempotencyKeyRepository.saveAndFlush(expiredRecord);
 
-        // Delete expired keys before now
-        int deleted = idempotencyKeyRepository.deleteExpiredKeysExcludingStatus(Instant.now(), IdempotencyKeyRecord.Status.IN_PROGRESS);
+        // Delete expired keys before now inside transaction
+        Integer deleted = txTemplate.execute(status ->
+                idempotencyKeyRepository.deleteExpiredKeysExcludingStatus(Instant.now(), IdempotencyKeyRecord.Status.IN_PROGRESS));
+        assertNotNull(deleted);
         assertTrue(deleted >= 1, "Expired idempotency keys must be cleanly deleted in PostgreSQL");
     }
 }
