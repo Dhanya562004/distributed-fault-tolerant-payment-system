@@ -217,9 +217,10 @@ public class OutboxDeliveryWorker {
                 return;
             }
 
-            // 2. If lease owner has changed to another worker, this worker has lost its lease; discard stale result.
-            if (event.getLeaseOwner() != null && !workerId.equals(event.getLeaseOwner())) {
-                logger.warn("[OUTBOX STALE WORKER] Worker {} lost lease for event {} (current lease owner: {}). Discarding stale delivery result.",
+            // 2. If lease owner has changed to another worker and this delivery failed, discard the stale failure
+            // so we do not overwrite the active worker's lease or increment attempt count prematurely.
+            if (!result.isSuccess() && event.getLeaseOwner() != null && !workerId.equals(event.getLeaseOwner())) {
+                logger.warn("[OUTBOX STALE WORKER] Worker {} lost lease for event {} (current lease owner: {}). Discarding stale failure result.",
                         workerId, event.getEventId(), event.getLeaseOwner());
                 return;
             }
