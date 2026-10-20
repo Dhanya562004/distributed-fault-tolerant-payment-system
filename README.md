@@ -11,6 +11,7 @@
 [![Docker Container](https://img.shields.io/badge/Docker-Multi--Stage%20Container-2496ED.svg?style=flat-square&logo=docker)](Dockerfile)
 [![Polyglot Persistence](https://img.shields.io/badge/Storage-PostgreSQL%20%7C%20MongoDB%20%7C%20H2-336791.svg?style=flat-square&logo=postgresql)](docs/architecture.md)
 [![Automated Tests](https://img.shields.io/badge/Tests-153%20Total%20(100%25)-10B981.svg?style=flat-square&logo=checkmarx)](docs/testing.md)
+[![AI Usage](https://img.shields.io/badge/AI%20Usage-Transparent%20Disclosure-8B5CF6.svg?style=flat-square)](AI_USAGE.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 
 <p align="center">
@@ -18,7 +19,7 @@
   Built with <b>Java 17, Spring Boot 3.3, and Python Streamlit</b> featuring <b>distributed cryptographic idempotency</b>, <b>24-hour retention expiry</b>, <b>Idempotent-Replayed HTTP headers</b>, <b>Transactional Outbox Pattern & Reliable Webhook Engine</b>, <b>deterministic cursor-based keyset pagination</b>, <b>account-partitioned concurrency queues</b>, <b>exponential backoff with full jitter</b>, <b>fail-fast failure classification</b>, and <b>immutable NoSQL audit trails</b>.
 </p>
 
-[🎮 Launch Cloud Control Room](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/) • [🔌 Explore OpenAPI Specification](https://apexpay-backend-sc5s.onrender.com/swagger-ui.html) • [📑 Engineering Docs Suite](#-engineering-documentation-suite)
+[🎮 Launch Cloud Control Room](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/) • [🔌 Explore OpenAPI Specification](https://apexpay-backend-sc5s.onrender.com/swagger-ui.html) • [🤖 AI Usage Disclosure](AI_USAGE.md) • [📑 Engineering Docs Suite](#-engineering-documentation-suite)
 
 </div>
 
@@ -310,10 +311,12 @@ The test suite validates correctness under heavy contention and failure scenario
 | 📝 **[Initial Codebase Audit](docs/initial-audit.md)** | Forensic analysis of baseline code, identified edge cases, and upgrade roadmap. |
 | 📜 **[Development Log](docs/dev-log.md)** | Chronological log of changes, refactorings, and verification commands. |
 | ✅ **[Final Verification Report](docs/final-verification.md)** | Exact build commands, execution times, test counts, and artifact confirmation. |
+| 🤖 **[AI Usage Disclosure](AI_USAGE.md)** | Comprehensive disclosure of AI-assisted engineering tools (Antigravity & ChatGPT), human governance, test verification, and deployment realities. |
 
 ---
 
 ## 🤝 License & Attribution
 
 Distributed under the **Apache 2.0 License**. See [LICENSE](LICENSE) for details.  
-Engineered as an enterprise reference implementation for resilient, distributed fintech systems.
+Engineered as an enterprise reference implementation for resilient, distributed fintech systems.  
+For a transparent breakdown of AI-assisted development, human governance, test verification, and deployment architecture, see [AI_USAGE.md](AI_USAGE.md).
