@@ -25,6 +25,21 @@
 
 ---
 
+## 📡 Telemetry & Fault Injection
+
+ApexPay provides real-time operational telemetry and fault-injection inspection via `GET /api/v1/metrics`. Based on the runtime system metrics snapshot, the endpoint exposes:
+- **Transaction Counters**: `totalTransactions`, `successfulTransactions`, `failedTransactions`, and a granular `statusBreakdown` (`SUCCESS`, `FAILED`, `REFUNDED`, `PROCESSING`, `REFUND_PENDING`, `PENDING`, `REFUND_FAILED`).
+- **Retry Counters**: `retryCount`, capturing transient network and gateway failures recovered automatically through exponential backoff with full jitter.
+- **Idempotency Interceptions**: `idempotencyHits`, tracking duplicate client submissions intercepted and served from cache with zero duplicate balance deductions.
+- **Dead Letter Queue (DLQ) Counters**: `dlqCount`, tracking exhausted poison-pill transactions quarantined into the DLQ.
+- **Latency & Performance Metrics**: `averageLatencyMs` (end-to-end processing duration), `successRatePercent` (SLA gateway authorization rate), and `activeQueueDepth` (in-flight partitioned queue workload), alongside an ISO-8601 UTC `timestamp`.
+
+The raw JSON payload captured from a live local instance is available at [`docs/images/metrics-response.json`](docs/images/metrics-response.json).
+
+![Fault-injection lab](docs/images/fault-injection.png)
+
+---
+
 ## Instant Cloud Live Deployment
 
 | Service | Live Link | Purpose |

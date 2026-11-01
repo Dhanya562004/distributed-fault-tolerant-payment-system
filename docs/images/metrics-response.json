@@ -1,0 +1,21 @@
+{
+  "totalTransactions": 0,
+  "successfulTransactions": 0,
+  "failedTransactions": 0,
+  "retryCount": 0,
+  "idempotencyHits": 0,
+  "dlqCount": 0,
+  "successRatePercent": 0.0,
+  "averageLatencyMs": 0.0,
+  "activeQueueDepth": 0,
+  "statusBreakdown": {
+    "SUCCESS": 0,
+    "FAILED": 0,
+    "REFUNDED": 0,
+    "PROCESSING": 0,
+    "REFUND_PENDING": 0,
+    "PENDING": 0,
+    "REFUND_FAILED": 0
+  },
+  "timestamp": "2026-11-01T08:08:54.923108500Z"
+}
