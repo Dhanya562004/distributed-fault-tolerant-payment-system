@@ -22,8 +22,8 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
-    - name: Run Fast H2 Unit & Integration Tests
-      run: mvn clean test -B
+    - name: Run Fast H2 Unit & Integration Tests and Generate JaCoCo Coverage Report
+      run: mvn clean verify -B
 
     - name: Archive H2 Test Reports
       if: always()
@@ -31,6 +31,13 @@ jobs:
       with:
         name: h2-surefire-reports
         path: target/surefire-reports/
+
+    - name: Upload JaCoCo Coverage Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: jacoco-coverage-report
+        path: target/site/jacoco/
 
   stage-b-postgresql-integration:
     name: "Stage B: PostgreSQL 16 Testcontainers Suite"

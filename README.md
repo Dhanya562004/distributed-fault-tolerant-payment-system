@@ -233,6 +233,17 @@ This provisions:
 
 ---
 
+## 📊 Test Coverage
+
+The line and branch coverage metrics below were measured directly from `mvn clean verify` using the JaCoCo Maven plugin reporting on the application classes (reports generated under `target/site/jacoco/`):
+
+| Metric | Value | Source |
+| :--- | :--- | :--- |
+| Line Coverage | 69.13% (1,760 / 2,546 lines covered; 69% in index.html) | `mvn clean verify` (JaCoCo) |
+| Branch Coverage | 61.65% (381 / 618 branches covered; 61% in index.html) | `mvn clean verify` (JaCoCo) |
+
+---
+
 ## 🧪 Automated Testing & Verification Evidence
 
 The test suite validates correctness under heavy contention and failure scenarios:
