@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 
-**ApexPay** is an educational and architectural reference implementation of a distributed, fault-tolerant payment and transaction processing engine. It demonstrates resilient backend patterns modeled after tier-1 financial infrastructure (such as Stripe, PayPal, and Standard Chartered Bank specifications), focusing on transaction safety, concurrency control, and fault tolerance.
+**ApexPay** is an educational reference implementation of a distributed, fault-tolerant payment and transaction processing engine, focusing on transaction safety, concurrency control, and fault tolerance.
 
 ### Core Technology Stack
 - **Backend Framework:** Java 17, Spring Boot 3.3.4, Spring Data JPA, Hibernate
@@ -68,7 +68,7 @@ AI assistance was utilized interactively across multiple phases of the engineeri
 The human project owner directed and governed the development lifecycle:
 
 ### Human Responsibilities
-- **Defined Project Requirements and Priorities:** Established system objectives, architectural scope (modeled after Standard Chartered Bank Band 8 engineering requirements), and functional milestones.
+- **Defined Project Requirements and Priorities:** Established system objectives, architectural scope, and functional milestones.
 - **Directed AI-Assisted Development:** Prompted AI tools, guided architectural choices, specified design patterns (e.g., cryptographic idempotency, transactional outbox, keyset pagination), and steered implementation iterations.
 - **Managed GitHub Repository Activities:** Managed repository activities, coordinated commits and pull requests, monitored GitHub Actions workflows, and maintained the main branch.
 - **Reviewed Development Reports and CI Outcomes:** Monitored build outputs, evaluated test execution reports across H2 and PostgreSQL 16 Testcontainers stages, and verified CI run results in GitHub Actions.

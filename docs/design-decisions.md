@@ -1,7 +1,6 @@
 # Architectural Decision Records (ADRs)
 
 **System**: Distributed Fault-Tolerant Payment System  
-**Standard Chartered Bank — Development Engineer (Band 8)**  
 **Date**: October 10, 2026  
 
 ---

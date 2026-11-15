@@ -16,7 +16,7 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Distributed Fault-Tolerant Payment System API")
                         .version("1.0.0")
-                        .description("Production-Grade Distributed Fault-Tolerant Payment & Transaction Processing System (Spring Boot + Partitioned Async Workers + Idempotency Engine)")
+                        .description("Distributed Fault-Tolerant Payment & Transaction Processing System (Spring Boot + Partitioned Async Workers + Idempotency Engine)")
                         .contact(new Contact()
                                 .name("Payment Engineering Team")
                                 .email("engineering@paymentsystem.internal"))

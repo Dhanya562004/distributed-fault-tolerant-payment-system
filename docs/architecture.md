@@ -1,15 +1,14 @@
 # System Architecture & Technical Design
 
-**System**: Enterprise Distributed Fault-Tolerant Payment Engine  
-**Target Organization**: Standard Chartered Bank — Development Engineer (Band 8)  
+**System**: Distributed Fault-Tolerant Payment Engine  
 **Document Version**: 2.0  
-**Status**: Production Verified  
+**Status**: Verified  
 
 ---
 
 ## 1. Architectural Philosophy & Overview
 
-The system is engineered as an enterprise-grade financial transaction processing engine modeled after the core payment processing architectures used at major global banks and payment networks (Standard Chartered, Stripe, Adyen). 
+The system is designed as a financial transaction processing engine focused on transaction safety, concurrency control, and fault tolerance.
 
 The core engineering requirements dictate:
 1. **Zero Double-Spending**: Strict single-execution idempotency guarantees even under massive network retries and concurrent client submissions.
@@ -26,7 +25,7 @@ The following diagram illustrates the verified live cloud topology across Stream
 
 ```
                           +-------------------------+
-                          |     User / Recruiter    |
+                          |          User           |
                           +-------------------------+
                                        |
                                        | HTTPS
@@ -78,7 +77,7 @@ The following diagram illustrates the verified live cloud topology across Stream
 
 ### Verified Cloud Components & Network Topology:
 
-1. **User / Recruiter**:
+1. **User**:
    - Accesses the public Streamlit Cloud Dashboard via modern web browser over TLS 1.3.
 2. **Streamlit Cloud Dashboard (`https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/`)**:
    - Hosted on Streamlit Community Cloud (Python 3.11).
@@ -95,7 +94,7 @@ The following diagram illustrates the verified live cloud topology across Stream
 4. **Configured Persistence Layer**:
    - **Live Render Cloud Deployment**: Operates with embedded **H2 in-memory database** (`jdbc:h2:mem:payments_db;DB_CLOSE_DELAY=-1;MODE=PostgreSQL`) under the default `dev` Spring profile. Validated via `GET /actuator/health` which explicitly reports `"database": "H2"`.
    - **Production Enterprise Profile (`application-prod.yml`)**: Configured for external managed PostgreSQL 16 (`jdbc:postgresql://${SPRING_DATASOURCE_URL}`) with HikariCP connection pooling, PostgreSQL dialect, and MongoDB audit store.
-   - **CI/CD Quality Gate**: 100% verified against authentic PostgreSQL 16 using Testcontainers in GitHub Actions Stage B (35 tests covering row-level locking, MVCC, and 1,000-request concurrency stress benchmarks).
+   - **CI/CD Quality Gate**: Verified against PostgreSQL 16 using Testcontainers in GitHub Actions Stage B (35 tests covering row-level locking, MVCC, and 1,000-request concurrency stress benchmarks).
 
 ---
 
