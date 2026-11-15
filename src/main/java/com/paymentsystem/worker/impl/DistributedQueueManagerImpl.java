@@ -35,7 +35,7 @@ public class DistributedQueueManagerImpl implements DistributedQueueManager {
     @Override
     public int calculatePartition(String partitionKey) {
         if (partitionKey == null) return 0;
-        return Math.abs(partitionKey.hashCode()) % NUM_PARTITIONS;
+        return Math.floorMod(partitionKey.hashCode(), NUM_PARTITIONS);
     }
 
     @Override

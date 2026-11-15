@@ -1,10 +1,14 @@
 package com.paymentsystem.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.paymentsystem.dto.response.PaymentResponse;
 import com.paymentsystem.entity.IdempotencyKeyRecord;
+import com.paymentsystem.entity.PaymentStatus;
+import com.paymentsystem.entity.PaymentTransaction;
 import com.paymentsystem.exception.DuplicateRequestException;
 import com.paymentsystem.exception.PayloadMismatchException;
 import com.paymentsystem.repository.IdempotencyKeyRepository;
+import com.paymentsystem.repository.PaymentTransactionRepository;
 import com.paymentsystem.service.IdempotencyService;
 import com.paymentsystem.service.MetricsService;
 import org.slf4j.Logger;
@@ -21,6 +25,7 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -32,25 +37,38 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     private final ObjectMapper objectMapper;
     private final MetricsService metricsService;
     private final Clock clock;
+    private final PaymentTransactionRepository paymentRepository;
 
     @Value("${app.idempotency.retention-hours:24}")
     private long retentionHours = 24;
+
+    @Value("${app.idempotency.in-progress-timeout-seconds:120}")
+    private long inProgressTimeoutSeconds = 120;
 
     @Autowired
     public IdempotencyServiceImpl(IdempotencyKeyRepository idempotencyKeyRepository,
                                   ObjectMapper objectMapper,
                                   MetricsService metricsService,
-                                  Clock clock) {
+                                  Clock clock,
+                                  @Autowired(required = false) PaymentTransactionRepository paymentRepository) {
         this.idempotencyKeyRepository = idempotencyKeyRepository;
         this.objectMapper = objectMapper;
         this.metricsService = metricsService;
         this.clock = clock;
+        this.paymentRepository = paymentRepository;
+    }
+
+    public IdempotencyServiceImpl(IdempotencyKeyRepository idempotencyKeyRepository,
+                                  ObjectMapper objectMapper,
+                                  MetricsService metricsService,
+                                  Clock clock) {
+        this(idempotencyKeyRepository, objectMapper, metricsService, clock, null);
     }
 
     public IdempotencyServiceImpl(IdempotencyKeyRepository idempotencyKeyRepository,
                                   ObjectMapper objectMapper,
                                   MetricsService metricsService) {
-        this(idempotencyKeyRepository, objectMapper, metricsService, Clock.systemUTC());
+        this(idempotencyKeyRepository, objectMapper, metricsService, Clock.systemUTC(), null);
     }
 
     public void setRetentionHours(long retentionHours) {
@@ -230,5 +248,94 @@ public class IdempotencyServiceImpl implements IdempotencyService {
             logger.info("Cleaned up {} expired idempotency keys before UTC {}", deleted, now);
         }
         return deleted;
+    }
+
+    public void setInProgressTimeoutSeconds(long inProgressTimeoutSeconds) {
+        this.inProgressTimeoutSeconds = inProgressTimeoutSeconds;
+    }
+
+    @Override
+    public long getInProgressTimeoutSeconds() {
+        return inProgressTimeoutSeconds;
+    }
+
+    @Override
+    @Transactional
+    @Scheduled(fixedDelayString = "${app.idempotency.recovery-job-interval-ms:60000}")
+    public int recoverStuckKeys() {
+        return recoverStuckKeys(Instant.now(clock), Duration.ofSeconds(inProgressTimeoutSeconds));
+    }
+
+    @Override
+    @Transactional
+    public int recoverStuckKeys(Instant now, Duration threshold) {
+        Instant cutoff = now.minus(threshold);
+        List<IdempotencyKeyRecord> stuckKeys = idempotencyKeyRepository.findStuckKeys(
+                IdempotencyKeyRecord.Status.IN_PROGRESS, cutoff
+        );
+
+        if (stuckKeys.isEmpty()) {
+            return 0;
+        }
+
+        int recoveredCount = 0;
+        for (IdempotencyKeyRecord keyRecord : stuckKeys) {
+            String keyValue = keyRecord.getKeyValue();
+            Optional<PaymentTransaction> paymentOpt = paymentRepository != null ?
+                    paymentRepository.findByIdempotencyKey(keyValue) : Optional.empty();
+
+            IdempotencyKeyRecord.Status targetStatus;
+            String responseBody;
+            int statusCode;
+
+            if (paymentOpt.isPresent() && paymentOpt.get().getStatus() == PaymentStatus.SUCCESS) {
+                PaymentTransaction tx = paymentOpt.get();
+                PaymentResponse response = new PaymentResponse();
+                response.setPaymentId(tx.getPaymentId());
+                response.setIdempotencyKey(tx.getIdempotencyKey());
+                response.setUserId(tx.getUserId());
+                response.setAmount(tx.getAmount());
+                response.setCurrency(tx.getCurrency());
+                response.setStatus(tx.getStatus());
+                response.setPaymentMethod(tx.getPaymentMethod());
+                response.setDescription(tx.getDescription());
+                response.setFailureReason(tx.getFailureReason());
+                response.setRetryCount(tx.getRetryCount());
+                response.setCreatedAt(tx.getCreatedAt());
+                response.setUpdatedAt(tx.getUpdatedAt());
+                response.setIsCachedIdempotentResponse(true);
+
+                try {
+                    responseBody = objectMapper.writeValueAsString(response);
+                } catch (Exception e) {
+                    logger.error("Failed serializing recovered payment response for key: {}", keyValue, e);
+                    responseBody = "{\"status\":\"SUCCESS\",\"paymentId\":\"" + tx.getPaymentId() + "\"}";
+                }
+                statusCode = 200;
+                targetStatus = IdempotencyKeyRecord.Status.COMPLETED;
+                logger.info("[IDEMPOTENCY RECOVERY] Found successful payment {} for stuck key [{}]. Marking COMPLETED.", tx.getPaymentId(), keyValue);
+            } else {
+                responseBody = "{\"error\":\"Transaction recovery: operation abandoned or timed out while in progress\"}";
+                statusCode = 500;
+                targetStatus = IdempotencyKeyRecord.Status.FAILED;
+                logger.warn("[IDEMPOTENCY RECOVERY] No successful payment found for stuck key [{}]. Marking FAILED.", keyValue);
+            }
+
+            int updated = idempotencyKeyRepository.updateStuckKeyConditionally(
+                    keyValue,
+                    IdempotencyKeyRecord.Status.IN_PROGRESS,
+                    targetStatus,
+                    responseBody,
+                    statusCode,
+                    cutoff,
+                    now
+            );
+
+            if (updated > 0) {
+                recoveredCount++;
+            }
+        }
+
+        return recoveredCount;
     }
 }

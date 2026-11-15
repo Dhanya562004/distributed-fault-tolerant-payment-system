@@ -212,17 +212,17 @@ flowchart TD
 
 ---
 
-### 3.3 Partitioned Asynchronous Worker Pools
+### 3.3 In-Memory Partitioned Worker Pools
 
 For high-throughput payment volume, synchronous thread blocking on upstream banking gateways degrades capacity. The system provides an asynchronous execution path:
 
-1. When `asyncProcessing: true`, the payment record is saved in state `PROCESSING` and an `EventMessage` is published to the `DistributedQueueManager`.
+1. When `asyncProcessing: true`, the payment record is saved in state `PROCESSING` and an `EventMessage` is published to the in-memory queue manager (`DistributedQueueManagerImpl`).
 2. **Consistent Partition Assignment**:
-   $$\text{Partition Index} = |\text{userId.hashCode}()| \pmod{\text{Partition Count}}$$
-3. Messages for the same `userId` are routed to the exact same dedicated queue partition consumed by a single thread.
-4. **Guarantees**:
-   - Strict FIFO sequential processing for transactions on the same account (prevents balance race conditions).
-   - Horizontal multi-core scalability across distinct accounts.
+   $$\text{Partition Index} = \text{Math.floorMod}(\text{userId.hashCode}(), \text{Partition Count})$$
+3. Messages for the same `userId` are routed to the exact same dedicated in-memory queue partition consumed by a single worker thread.
+4. **Guarantees & Limits**:
+   - Strict FIFO sequential processing for transactions on the same account within a single instance.
+   - Note: Because partition queues are held in-memory (`LinkedBlockingQueue`), queued messages that have not yet been processed by a worker thread will be lost if the JVM crashes, and per-user FIFO order is not coordinated across multiple instances.
 
 ---
 

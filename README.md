@@ -2,7 +2,7 @@
 
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-007396.svg?style=flat-square&logo=openjdk)](https://www.oracle.com/java/)
 [![Spring Boot 3.3.4](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F.svg?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
-[![Tests](https://img.shields.io/badge/Tests-118%20Passing%20(H2)-10B981.svg?style=flat-square)](docs/testing.md)
+[![Tests](https://img.shields.io/badge/Tests-129%20Passing%20(H2)-10B981.svg?style=flat-square)](docs/testing.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 [![AI Usage](https://img.shields.io/badge/AI%20Usage-Disclosure-8B5CF6.svg?style=flat-square)](AI_USAGE.md)
 
@@ -12,10 +12,10 @@ A fault-tolerant payment processing engine built with Java 17 and Spring Boot 3.
 
 ## What It Does
 
-- **Cryptographic Idempotency Guard**: Evaluates incoming `X-Idempotency-Key` headers using SHA-256 payload hashing and database unique constraints. Duplicate requests within a 24-hour retention window return cached responses with an `Idempotent-Replayed: true` HTTP response header. Expired keys are atomically re-acquired without double-charging.
-- **Concurrency & Account Locking**: Protects user balances under concurrent load using pessimistic locking (`SELECT FOR UPDATE`) and JPA `@Version` optimistic locking. Consistent hash partitioning routes async requests by account ID for per-user FIFO execution.
-- **Failure Taxonomy & Retry Policies**: Differentiates between non-retryable business failures (e.g., insufficient funds, payload mismatches) which fail immediately, and retryable infrastructure failures (e.g., downstream socket timeouts, HTTP 503) which retry with exponential backoff and jitter. Repeated failures route to a Dead Letter Queue (DLQ).
-- **Transactional Outbox & Webhook Engine**: Commits domain events atomically within the payment transaction, then asynchronously dispatches signed webhook payloads (HMAC-SHA256) with lease-based crash recovery and retry management.
+- **Cryptographic Idempotency Guard**: Evaluates incoming `X-Idempotency-Key` headers using SHA-256 payload hashing and database unique constraints. Duplicate requests within a 24-hour retention window return cached responses with an `Idempotent-Replayed: true` HTTP response header. Expired keys are atomically re-acquired without double-charging. A recovery process detects `IN_PROGRESS` keys stuck beyond a configurable threshold (default 120s), inspects payment status to prevent double-charging, and safely resolves them to `COMPLETED` (with cached response) or `FAILED` via an atomic conditional update.
+- **Concurrency & Account Locking**: Protects user balances under concurrent load using pessimistic locking (`SELECT FOR UPDATE`) and JPA `@Version` optimistic locking. In-memory hash partitioning (`Math.floorMod(userId.hashCode(), N)`) routes async requests across internal worker threads by account ID for per-user FIFO execution within a single instance.
+- **Failure Taxonomy & Full Jitter Retry Policies**: Differentiates between non-retryable business failures (e.g., insufficient funds, payload mismatches) which fail immediately, and retryable infrastructure failures (e.g., downstream socket timeouts, HTTP 503) which retry with exponential backoff and real Full Jitter (uniform random delay between 0 and the capped backoff). Repeated failures route to a Dead Letter Queue (DLQ).
+- **Transactional Outbox & Webhook Engine**: Commits domain events atomically within the payment transaction, then asynchronously dispatches signed webhook payloads (HMAC-SHA256) with lease-based crash recovery and retry management. Webhook payloads include a timestamp (`timestamp.payload`) and requests older than 5 minutes (300 seconds) are rejected to prevent replay attacks, with full test coverage.
 - **Cumulative Refund Validation**: Validates partial and full refunds against the original payment total, rejecting any attempt that exceeds the captured amount.
 - **Keyset Pagination**: Implements deterministic cursor-based pagination (`createdAt DESC, id DESC`) with HMAC-SHA256 cursor integrity verification, avoiding SQL `OFFSET` performance penalties.
 
@@ -74,8 +74,8 @@ Provisions the backend (`8080`), PostgreSQL (`5432`), MongoDB (`27017`), and Str
 ```bash
 mvn clean test
 ```
-Runs the 118 unit and integration tests (controllers, service logic, outbox workers, idempotency expiry, and pagination).
-- **Status**: 118 passed, 0 failures, 0 errors.
+Runs the 129 unit and integration tests (controllers, service logic, outbox workers, idempotency expiry, stuck-key recovery, queue partitioning, and pagination).
+- **Status**: 129 passed, 0 failures, 0 errors.
 
 ### 2. PostgreSQL 16 Testcontainers Suite (Requires Docker)
 ```bash
@@ -109,6 +109,7 @@ Measured with JaCoCo (`mvn test jacoco:report`):
 ## Known Limits
 
 - **Demo Persistence**: The public Render deployment uses an in-memory H2 database (`MODE=PostgreSQL`). Data does not persist across service restarts or free-tier sleep cycles. A PostgreSQL configuration is provided in `application-prod.yml`.
+- **In-Memory Partition Queues**: Worker queues are held in memory (`LinkedBlockingQueue`) inside a single JVM instance. If the application crashes, any payments waiting in the in-memory queue are lost (they remain in `PROCESSING` state in the database, with their idempotency key in `IN_PROGRESS` until the stuck-key recovery job marks them `FAILED`). Furthermore, per-user FIFO ordering is preserved only within a single application instance; multiple instances would race independently unless partitioned at an external message broker or database lock level.
 - **Synthetic Banking Rails**: Payment authorization calls are handled by an internal simulator (`GatewaySimulationServiceImpl`) with configurable latency and error rates, not live banking networks.
 - **Educational Scope**: This project is an architectural reference and demonstration. It is not PCI-DSS certified and should not be used to process real monetary transactions.
 - **Docker Dependency for Testcontainers**: The PostgreSQL integration tests require a running Docker daemon and cannot execute in environments without Docker.

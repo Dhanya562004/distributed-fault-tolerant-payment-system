@@ -20,6 +20,7 @@ import com.paymentsystem.service.IdempotencyService;
 import com.paymentsystem.service.MetricsService;
 import com.paymentsystem.service.PaymentPaginationService;
 import com.paymentsystem.service.PaymentProcessingService;
+import com.paymentsystem.service.RetryJitterPolicy;
 import com.paymentsystem.service.PaymentTransactionCoordinator;
 import com.paymentsystem.worker.DistributedQueueManager;
 import com.paymentsystem.worker.EventMessage;
@@ -51,6 +52,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
     private final PaymentTransactionCoordinator paymentCoordinator;
     private final PaymentPaginationService paginationService;
     private final org.springframework.transaction.support.TransactionTemplate txTemplate;
+    private RetryJitterPolicy retryJitterPolicy = new RetryJitterPolicy();
 
     public PaymentProcessingServiceImpl(PaymentTransactionRepository paymentRepository,
                                         UserRepository userRepository,
@@ -124,6 +126,12 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
             });
         } else {
             action.run();
+        }
+    }
+
+    public void setRetryJitterPolicy(RetryJitterPolicy retryJitterPolicy) {
+        if (retryJitterPolicy != null) {
+            this.retryJitterPolicy = retryJitterPolicy;
         }
     }
 
@@ -210,7 +218,6 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
         );
 
         int attempts = 0;
-        long backoffMs = 500;
         boolean success = false;
         String lastError = null;
 
@@ -219,9 +226,9 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
             try {
                 if (attempts > 1) {
                     metricsService.recordRetry();
-                    logger.info("[RETRY ATTEMPT {}/{}] Retrying payment {} with backoff {}ms", attempts, MAX_RETRY_ATTEMPTS, paymentId, backoffMs);
+                    long backoffMs = retryJitterPolicy.calculateFullJitterDelay(attempts - 1, 500, 8000);
+                    logger.info("[RETRY ATTEMPT {}/{}] Retrying payment {} with full jitter backoff {}ms", attempts, MAX_RETRY_ATTEMPTS, paymentId, backoffMs);
                     Thread.sleep(backoffMs);
-                    backoffMs = Math.min((long) (backoffMs * 2.0 + (Math.random() * 200)), 8000);
                 }
 
                 runInTransaction(() -> executeSinglePaymentAttempt(tx, request));

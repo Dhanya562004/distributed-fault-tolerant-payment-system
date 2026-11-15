@@ -527,4 +527,91 @@ public class IdempotencyExpiryAndReplayTest {
                 .andExpect(header().doesNotExist("Idempotent-Replayed"))
                 .andExpect(jsonPath("$.error").value("IDEMPOTENCY_CONFLICT"));
     }
+
+    @Test
+    @DisplayName("12. Stuck IN_PROGRESS key with no payment record is recovered as FAILED")
+    void test12_StuckKeyWithNoPayment_RecoveredAsFailed() {
+        String key = "IDEM_STUCK_NOPAY_" + System.nanoTime();
+        Instant pastTime = clock.instant().minus(Duration.ofMinutes(5));
+
+        IdempotencyKeyRecord record = new IdempotencyKeyRecord(key, "hash123", pastTime, pastTime.plus(Duration.ofHours(24)));
+        record.setStatus(IdempotencyKeyRecord.Status.IN_PROGRESS);
+        idempotencyKeyRepository.saveAndFlush(record);
+
+        int recovered = idempotencyService.recoverStuckKeys(clock.instant(), Duration.ofSeconds(120));
+        assertEquals(1, recovered, "Must recover 1 stuck key");
+
+        IdempotencyKeyRecord updated = idempotencyKeyRepository.findByKeyValue(key).orElseThrow();
+        assertEquals(IdempotencyKeyRecord.Status.FAILED, updated.getStatus());
+        assertEquals(500, updated.getHttpStatusCode());
+        assertNotNull(updated.getResponseBody());
+        assertTrue(updated.getResponseBody().contains("timed out") || updated.getResponseBody().contains("abandoned"));
+    }
+
+    @Test
+    @DisplayName("13. Stuck IN_PROGRESS key with successful payment is recovered as COMPLETED without double-charging")
+    void test13_StuckKeyWithSuccessfulPayment_RecoveredAsCompletedWithoutDoubleCharge() throws Exception {
+        String userCode = createTestUser(new BigDecimal("1000.00"));
+        String key = "IDEM_STUCK_PAID_" + System.nanoTime();
+        Instant pastTime = clock.instant().minus(Duration.ofMinutes(5));
+
+        // Deduct balance manually (simulating crash after payment succeeded)
+        User user = userRepository.findByUserCode(userCode).orElseThrow();
+        user.setBalance(new BigDecimal("900.00"));
+        userRepository.saveAndFlush(user);
+
+        // Persist payment transaction
+        String paymentId = "PAY_RECOVERED_" + System.nanoTime();
+        PaymentTransaction tx = new PaymentTransaction(
+                paymentId, key, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Recovered test payment"
+        );
+        tx.setStatus(PaymentStatus.SUCCESS);
+        paymentTransactionRepository.saveAndFlush(tx);
+
+        InitiatePaymentRequest req = new InitiatePaymentRequest(
+                key, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Recovered test payment"
+        );
+        String requestHash = idempotencyService.computePayloadHash(req);
+
+        // Stuck IN_PROGRESS key
+        IdempotencyKeyRecord record = new IdempotencyKeyRecord(key, requestHash, pastTime, pastTime.plus(Duration.ofHours(24)));
+        record.setStatus(IdempotencyKeyRecord.Status.IN_PROGRESS);
+        idempotencyKeyRepository.saveAndFlush(record);
+
+        // Run recovery job
+        int recovered = idempotencyService.recoverStuckKeys(clock.instant(), Duration.ofSeconds(120));
+        assertEquals(1, recovered, "Must recover 1 stuck key");
+
+        IdempotencyKeyRecord updated = idempotencyKeyRepository.findByKeyValue(key).orElseThrow();
+        assertEquals(IdempotencyKeyRecord.Status.COMPLETED, updated.getStatus());
+        assertEquals(200, updated.getHttpStatusCode());
+        assertNotNull(updated.getResponseBody());
+        assertTrue(updated.getResponseBody().contains(paymentId));
+
+        // Resubmitting payment request must return cached response without double balance deduction
+        PaymentResponse response = paymentProcessingService.initiatePayment(req);
+        assertNotNull(response);
+        assertEquals(paymentId, response.getPaymentId());
+        assertEquals(PaymentStatus.SUCCESS, response.getStatus());
+
+        User userAfter = userRepository.findByUserCode(userCode).orElseThrow();
+        assertEquals(0, new BigDecimal("900.0000").compareTo(userAfter.getBalance()), "Balance must NOT be charged again");
+    }
+
+    @Test
+    @DisplayName("14. IN_PROGRESS key within timeout threshold is not touched by recovery")
+    void test14_KeyWithinThreshold_NotTouchedByRecovery() {
+        String key = "IDEM_ACTIVE_" + System.nanoTime();
+        Instant recentTime = clock.instant().minus(Duration.ofSeconds(30)); // 30s ago, threshold is 120s
+
+        IdempotencyKeyRecord record = new IdempotencyKeyRecord(key, "hash_active", recentTime, recentTime.plus(Duration.ofHours(24)));
+        record.setStatus(IdempotencyKeyRecord.Status.IN_PROGRESS);
+        idempotencyKeyRepository.saveAndFlush(record);
+
+        int recovered = idempotencyService.recoverStuckKeys(clock.instant(), Duration.ofSeconds(120));
+        assertEquals(0, recovered, "Must not recover key still within threshold");
+
+        IdempotencyKeyRecord untouched = idempotencyKeyRepository.findByKeyValue(key).orElseThrow();
+        assertEquals(IdempotencyKeyRecord.Status.IN_PROGRESS, untouched.getStatus());
+    }
 }

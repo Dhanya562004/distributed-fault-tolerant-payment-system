@@ -383,4 +383,83 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
                 .toList();
         assertEquals(2, txs.size(), "PostgreSQL must contain exactly 2 transaction records");
     }
+
+    @Test
+    @DisplayName("PostgreSQL Stuck Key Recovery: Stuck IN_PROGRESS key with no payment is marked FAILED")
+    void testPostgreSqlStuckKeyWithNoPayment_RecoveredAsFailed() {
+        String key = "PG_STUCK_NOPAY_" + System.nanoTime();
+        Instant pastTime = Instant.now().minus(Duration.ofMinutes(5));
+
+        IdempotencyKeyRecord record = new IdempotencyKeyRecord(key, "hash_pg_1", pastTime, pastTime.plus(Duration.ofHours(24)));
+        record.setStatus(IdempotencyKeyRecord.Status.IN_PROGRESS);
+        idempotencyKeyRepository.saveAndFlush(record);
+
+        int recovered = idempotencyService.recoverStuckKeys(Instant.now(), Duration.ofSeconds(120));
+        assertEquals(1, recovered, "PostgreSQL must recover 1 stuck key");
+
+        IdempotencyKeyRecord updated = idempotencyKeyRepository.findByKeyValue(key).orElseThrow();
+        assertEquals(IdempotencyKeyRecord.Status.FAILED, updated.getStatus());
+        assertEquals(500, updated.getHttpStatusCode());
+    }
+
+    @Test
+    @DisplayName("PostgreSQL Stuck Key Recovery: Stuck key with successful payment is marked COMPLETED without double-charging")
+    void testPostgreSqlStuckKeyWithSuccessfulPayment_RecoveredAsCompletedWithoutDoubleCharge() {
+        String userCode = "USR_PG_REC_" + System.nanoTime();
+        User user = new User(userCode, "PG User", userCode + "@example.com", new BigDecimal("1000.00"));
+        user.setBalance(new BigDecimal("900.00"));
+        userRepository.saveAndFlush(user);
+
+        String key = "PG_STUCK_PAID_" + System.nanoTime();
+        Instant pastTime = Instant.now().minus(Duration.ofMinutes(5));
+
+        String paymentId = "PAY_PG_REC_" + System.nanoTime();
+        PaymentTransaction tx = new PaymentTransaction(
+                paymentId, key, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "PG Recovered payment"
+        );
+        tx.setStatus(PaymentStatus.SUCCESS);
+        paymentTransactionRepository.saveAndFlush(tx);
+
+        InitiatePaymentRequest req = new InitiatePaymentRequest(
+                key, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "PG Recovered payment"
+        );
+        String requestHash = idempotencyService.computePayloadHash(req);
+
+        IdempotencyKeyRecord record = new IdempotencyKeyRecord(key, requestHash, pastTime, pastTime.plus(Duration.ofHours(24)));
+        record.setStatus(IdempotencyKeyRecord.Status.IN_PROGRESS);
+        idempotencyKeyRepository.saveAndFlush(record);
+
+        int recovered = idempotencyService.recoverStuckKeys(Instant.now(), Duration.ofSeconds(120));
+        assertEquals(1, recovered, "PostgreSQL must recover 1 stuck key");
+
+        IdempotencyKeyRecord updated = idempotencyKeyRepository.findByKeyValue(key).orElseThrow();
+        assertEquals(IdempotencyKeyRecord.Status.COMPLETED, updated.getStatus());
+        assertEquals(200, updated.getHttpStatusCode());
+
+        // Resubmit payment: must return cached response and NOT charge balance again
+        PaymentResponse response = paymentProcessingService.initiatePayment(req);
+        assertNotNull(response);
+        assertEquals(paymentId, response.getPaymentId());
+        assertEquals(PaymentStatus.SUCCESS, response.getStatus());
+
+        User userAfter = userRepository.findByUserCode(userCode).orElseThrow();
+        assertEquals(0, new BigDecimal("900.00").compareTo(userAfter.getBalance()), "PostgreSQL balance must NOT be double-charged");
+    }
+
+    @Test
+    @DisplayName("PostgreSQL Stuck Key Recovery: Key within threshold is not touched")
+    void testPostgreSqlKeyWithinThreshold_NotTouchedByRecovery() {
+        String key = "PG_ACTIVE_" + System.nanoTime();
+        Instant recentTime = Instant.now().minus(Duration.ofSeconds(20));
+
+        IdempotencyKeyRecord record = new IdempotencyKeyRecord(key, "hash_pg_act", recentTime, recentTime.plus(Duration.ofHours(24)));
+        record.setStatus(IdempotencyKeyRecord.Status.IN_PROGRESS);
+        idempotencyKeyRepository.saveAndFlush(record);
+
+        int recovered = idempotencyService.recoverStuckKeys(Instant.now(), Duration.ofSeconds(120));
+        assertEquals(0, recovered);
+
+        IdempotencyKeyRecord untouched = idempotencyKeyRepository.findByKeyValue(key).orElseThrow();
+        assertEquals(IdempotencyKeyRecord.Status.IN_PROGRESS, untouched.getStatus());
+    }
 }

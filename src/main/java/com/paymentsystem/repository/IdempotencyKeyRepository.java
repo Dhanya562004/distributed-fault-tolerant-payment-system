@@ -35,4 +35,18 @@ public interface IdempotencyKeyRepository extends JpaRepository<IdempotencyKeyRe
 
     @Query("SELECT COUNT(i) FROM IdempotencyKeyRecord i WHERE i.expiresAt <= :now")
     long countExpiredKeys(@Param("now") Instant now);
+
+    @Query("SELECT i FROM IdempotencyKeyRecord i WHERE i.status = :status AND i.updatedAt <= :cutoff")
+    java.util.List<IdempotencyKeyRecord> findStuckKeys(@Param("status") IdempotencyKeyRecord.Status status,
+                                                       @Param("cutoff") Instant cutoff);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE IdempotencyKeyRecord i SET i.status = :newStatus, i.responseBody = :responseBody, i.httpStatusCode = :statusCode, i.updatedAt = :now WHERE i.keyValue = :keyValue AND i.status = :expectedStatus AND i.updatedAt <= :cutoff")
+    int updateStuckKeyConditionally(@Param("keyValue") String keyValue,
+                                    @Param("expectedStatus") IdempotencyKeyRecord.Status expectedStatus,
+                                    @Param("newStatus") IdempotencyKeyRecord.Status newStatus,
+                                    @Param("responseBody") String responseBody,
+                                    @Param("statusCode") Integer statusCode,
+                                    @Param("cutoff") Instant cutoff,
+                                    @Param("now") Instant now);
 }

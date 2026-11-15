@@ -86,13 +86,13 @@ The human project owner directed and governed the development lifecycle:
 
 ### Reported Automated Test Results
 
-The repository test suite consists of **153 total automated tests** across 23 test classes, structured into two execution tiers:
+The repository test suite consists of **167 total automated tests** across 24 test classes, structured into two execution tiers:
 
 | Test Execution Stage | Environment | Test Count | Status | Verified Evidence |
 | :--- | :--- | :---: | :---: | :--- |
-| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 118 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` and Surefire test reports (`target/surefire-reports/*.txt`). |
-| **Stage B: Concurrency & Real Database** | PostgreSQL 16 Testcontainers (Docker) | 35 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified in GitHub Actions CI (e.g., Run `39263927415`) via `mvn test -Ppostgres-it`. |
-| **Total Automated Suite** | Combined | **153** | **PASSED** | 100% pass rate across all documented test suites. |
+| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 129 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` (129 tests passed in 01:12 min). |
+| **Stage B: Concurrency & Real Database** | PostgreSQL 16 Testcontainers (Docker) | 38 | **Configured** (Docker-dependent) | 38 tests across 6 classes (including 3 new stuck-key recovery tests in `PostgreSqlIdempotencyTest`). Requires running Docker daemon (`mvn test -Ppostgres-it`). |
+| **Total Automated Suite** | Combined | **167** | **129 Passing locally (Docker-free), 38 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
 
 ### Concurrency Stress Benchmark
 - **Test Implementation:** `ConcurrentPaymentTest` (H2) and `PostgreSqlConcurrencyStressTest` (PostgreSQL 16).
@@ -142,6 +142,18 @@ Transparency regarding AI-assisted development requires acknowledging key techni
 - **Mocking and Test Limitations:** AI-assisted test authoring may create tests that pass due to overly permissive mocks or synthetic assumptions rather than testing true runtime behavior. Rigorous containerized testing (such as PostgreSQL Testcontainers) is necessary to validate real database semantics.
 - **Necessity of Human Oversight:** Human review, domain knowledge, and testing rigor remain essential to evaluate architectural decisions, enforce security boundaries, and ensure reliable execution.
 - **Evidence-Based Technical Claims:** Technical metrics, complexity claims, and performance assertions must be backed by reproducible benchmark code and repository evidence rather than AI-generated estimates.
+
+### Phase 2 AI Mistakes and Corrections Log
+1. **Missing Package Import (`PaymentProcessingServiceImpl.java`)**:
+   - *Mistake*: When injecting the newly created `RetryJitterPolicy` into `PaymentProcessingServiceImpl`, the import statement `import com.paymentsystem.service.RetryJitterPolicy;` was omitted because the service implementation resides in `com.paymentsystem.service.impl` while the policy interface/class is in `com.paymentsystem.service`.
+   - *Impact*: Maven compilation failed with `cannot find symbol: class RetryJitterPolicy`.
+   - *Correction*: Explicitly imported `RetryJitterPolicy` into `PaymentProcessingServiceImpl.java` and recompiled.
+2. **Unhandled Checked Exception in Integration Test (`IdempotencyExpiryAndReplayTest.java`)**:
+   - *Mistake*: Newly authored test method `test13_StuckKeyWithSuccessfulPayment_RecoveredAsCompletedWithoutDoubleCharge()` called `createTestUser(...)`, which declares checked `throws Exception`. The test method signature initially omitted `throws Exception`.
+   - *Impact*: Maven test compilation failed with `unreported exception java.lang.Exception; must be caught or declared to be thrown`.
+   - *Correction*: Added `throws Exception` to the test method signature.
+3. **Queue Manager Multi-Instance Assumption (Item 3 Check)**:
+   - *Clarification*: The README previously implied consistent hash queue partitioning was distributed across instances. Inspection confirmed `DistributedQueueManagerImpl` uses local in-memory `LinkedBlockingQueue` instances within a single JVM. Crash semantics mean any queued tasks in memory are lost, and per-user ordering cannot be maintained across multiple instances without an external broker. Updated docs and README Known Limits to accurately reflect this single-instance architectural limit.
 
 ---
 

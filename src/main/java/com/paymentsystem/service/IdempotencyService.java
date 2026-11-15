@@ -12,5 +12,8 @@ public interface IdempotencyService {
     void markFailed(String keyValue, String errorMessage);
     int cleanupExpiredKeys();
     int cleanupExpiredKeys(Instant now);
+    int recoverStuckKeys();
+    int recoverStuckKeys(Instant now, java.time.Duration threshold);
     long getRetentionHours();
+    long getInProgressTimeoutSeconds();
 }
