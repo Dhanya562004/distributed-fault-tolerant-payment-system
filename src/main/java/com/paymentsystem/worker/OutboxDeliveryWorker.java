@@ -7,6 +7,7 @@ import com.paymentsystem.repository.OutboxEventRepository;
 import com.paymentsystem.service.MetricsService;
 import com.paymentsystem.service.WebhookDeliveryService;
 import com.paymentsystem.service.WebhookRetryPolicy;
+import org.slf4j.MDC;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -189,15 +190,23 @@ public class OutboxDeliveryWorker {
             event.setLeaseOwner(workerId);
         }
 
-        logger.info("[OUTBOX CLAIM] Worker {} claimed event {} (status: PROCESSING, lease until: {})",
-                workerId, event.getEventId(), lockedUntil);
+        if (event.getRequestId() != null) {
+            MDC.put("requestId", event.getRequestId());
+        }
 
-        // Crucial Architectural Rule: Outbound HTTP dispatch MUST occur outside any open DB transaction
-        DeliveryResult result = webhookDeliveryService.deliver(event);
+        try {
+            logger.info("[OUTBOX CLAIM] Worker {} claimed event {} (status: PROCESSING, lease until: {})",
+                    workerId, event.getEventId(), lockedUntil);
 
-        // Record terminal or retry state in short transaction
-        recordDeliveryResult(event.getId(), result);
-        return true;
+            // Crucial Architectural Rule: Outbound HTTP dispatch MUST occur outside any open DB transaction
+            DeliveryResult result = webhookDeliveryService.deliver(event);
+
+            // Record terminal or retry state in short transaction
+            recordDeliveryResult(event.getId(), result);
+            return true;
+        } finally {
+            MDC.remove("requestId");
+        }
     }
 
     /**

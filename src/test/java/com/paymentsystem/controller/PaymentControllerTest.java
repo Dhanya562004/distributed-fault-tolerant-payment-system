@@ -145,16 +145,20 @@ class PaymentControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/payments should support page and size parameters")
+    @DisplayName("GET /api/v1/payments should support page and size parameters returning standardized PagedResponse")
     void testGetAllPayments_WithPagination() throws Exception {
         PaymentResponse response = new PaymentResponse();
         response.setPaymentId("PAY_1");
         response.setStatus(PaymentStatus.SUCCESS);
 
-        when(paymentProcessingService.getAllPayments(0, 10)).thenReturn(List.of(response));
+        com.paymentsystem.dto.response.PagedResponse<PaymentResponse> paged =
+                com.paymentsystem.dto.response.PagedResponse.paginate(List.of(response), 0, 10);
+        when(paymentProcessingService.getAllPaymentsPaged(0, 10)).thenReturn(paged);
 
         mockMvc.perform(get("/api/v1/payments?page=0&size=10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.pagination.limit").value(10))
+                .andExpect(jsonPath("$.pagination.hasMore").value(false));
     }
 }

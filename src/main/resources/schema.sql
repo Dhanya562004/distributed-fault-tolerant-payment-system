@@ -10,6 +10,19 @@ CREATE TABLE IF NOT EXISTS currencies (
     name VARCHAR(64) NOT NULL
 );
 
+-- 0.1 API Keys Table (Multi-tenant Customer Authentication)
+CREATE TABLE IF NOT EXISTS api_keys (
+    id BIGSERIAL PRIMARY KEY,
+    key_value VARCHAR(128) NOT NULL UNIQUE,
+    customer_id VARCHAR(64) NOT NULL,
+    customer_name VARCHAR(128),
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key_value);
+CREATE INDEX IF NOT EXISTS idx_api_keys_customer_id ON api_keys(customer_id);
+
 -- 1. Users Table
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
@@ -37,6 +50,7 @@ CREATE TABLE IF NOT EXISTS payments (
     description VARCHAR(255),
     failure_reason VARCHAR(512),
     retry_count INT NOT NULL DEFAULT 0,
+    request_id VARCHAR(64),
     lock_version BIGINT DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -46,12 +60,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_payment_id ON payments(payment_id
 CREATE INDEX IF NOT EXISTS idx_payments_idempotency_key ON payments(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+CREATE INDEX IF NOT EXISTS idx_payments_request_id ON payments(request_id);
 CREATE INDEX IF NOT EXISTS idx_payments_created_at_id ON payments(created_at DESC, id DESC);
 
 -- 3. Idempotency Keys Table
 CREATE TABLE IF NOT EXISTS idempotency_keys (
     id BIGSERIAL PRIMARY KEY,
-    key_value VARCHAR(128) NOT NULL UNIQUE,
+    api_key VARCHAR(128) NOT NULL DEFAULT 'default',
+    key_value VARCHAR(128) NOT NULL,
     request_hash VARCHAR(64) NOT NULL,
     status VARCHAR(32) NOT NULL,
     response_body TEXT,
@@ -61,7 +77,8 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_idempotency_key_value ON idempotency_keys(key_value);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_idempotency_api_key_value ON idempotency_keys(api_key, key_value);
+CREATE INDEX IF NOT EXISTS idx_idempotency_key_value ON idempotency_keys(key_value);
 CREATE INDEX IF NOT EXISTS idx_idempotency_expires_at ON idempotency_keys(expires_at);
 
 -- 4. Refund Transactions Table
@@ -92,6 +109,7 @@ CREATE TABLE IF NOT EXISTS outbox_events (
     status VARCHAR(32) NOT NULL,
     attempt_count INT NOT NULL DEFAULT 0,
     max_attempts INT NOT NULL DEFAULT 5,
+    request_id VARCHAR(64),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     next_attempt_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -104,4 +122,5 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_outbox_event_id ON outbox_events(event_id);
 CREATE INDEX IF NOT EXISTS idx_outbox_status_next_attempt ON outbox_events(status, next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_outbox_aggregate_id ON outbox_events(aggregate_id);
+CREATE INDEX IF NOT EXISTS idx_outbox_request_id ON outbox_events(request_id);
 

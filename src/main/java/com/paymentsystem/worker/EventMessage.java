@@ -15,6 +15,8 @@ public class EventMessage {
     private int attemptCount;
     private long nextRetryTimestamp;
     private Instant createdAt;
+    private String requestId;
+    private String apiKey;
 
     public EventMessage() {
         this.createdAt = Instant.now();
@@ -121,5 +123,21 @@ public class EventMessage {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
+    }
+
+    public String getApiKey() {
+        return apiKey;
+    }
+
+    public void setApiKey(String apiKey) {
+        this.apiKey = apiKey;
     }
 }

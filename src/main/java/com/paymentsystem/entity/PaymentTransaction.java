@@ -48,6 +48,9 @@ public class PaymentTransaction {
     @Column(name = "retry_count", nullable = false)
     private Integer retryCount = 0;
 
+    @Column(name = "request_id", length = 64)
+    private String requestId;
+
     @Version
     @Column(name = "lock_version")
     private Long lockVersion;
@@ -179,6 +182,14 @@ public class PaymentTransaction {
 
     public void setRetryCount(Integer retryCount) {
         this.retryCount = retryCount;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
     }
 
     public Long getLockVersion() {

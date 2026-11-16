@@ -1,6 +1,7 @@
 package com.paymentsystem.controller;
 
 import com.paymentsystem.dto.request.ProcessRefundRequest;
+import com.paymentsystem.dto.response.PagedResponse;
 import com.paymentsystem.dto.response.RefundResponse;
 import com.paymentsystem.service.RefundProcessingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -50,8 +51,12 @@ public class RefundController {
     }
 
     @GetMapping("/payment/{paymentId}")
-    @Operation(summary = "List Payment Refunds", description = "Retrieves refund history for a given payment ID")
-    public ResponseEntity<List<RefundResponse>> getRefundsForPayment(@PathVariable String paymentId) {
-        return ResponseEntity.ok(refundProcessingService.getRefundsForPayment(paymentId));
+    @Operation(summary = "List Payment Refunds", description = "Retrieves refund history for a given payment ID with pagination support")
+    public ResponseEntity<PagedResponse<RefundResponse>> getRefundsForPayment(
+            @PathVariable String paymentId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        List<RefundResponse> refunds = refundProcessingService.getRefundsForPayment(paymentId);
+        return ResponseEntity.ok(PagedResponse.paginate(refunds, page, size));
     }
 }

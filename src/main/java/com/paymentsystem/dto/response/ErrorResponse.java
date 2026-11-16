@@ -3,11 +3,16 @@ package com.paymentsystem.dto.response;
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * Standardized consistent API error response format containing code, message, and requestId.
+ */
 public class ErrorResponse {
 
+    private String code;
+    private String message;
+    private String requestId;
     private int status;
     private String error;
-    private String message;
     private String path;
     private String traceId;
     private List<String> details;
@@ -17,14 +22,42 @@ public class ErrorResponse {
         this.timestamp = Instant.now();
     }
 
-    public ErrorResponse(int status, String error, String message, String path, String traceId, List<String> details) {
+    public ErrorResponse(int status, String code, String message, String path, String requestId, List<String> details) {
         this.status = status;
-        this.error = error;
+        this.code = code;
+        this.error = code;
         this.message = message;
         this.path = path;
-        this.traceId = traceId;
+        this.requestId = requestId;
+        this.traceId = requestId;
         this.details = details;
         this.timestamp = Instant.now();
+    }
+
+    public String getCode() {
+        return code != null ? code : error;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
+        this.error = code;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
+
+    public String getRequestId() {
+        return requestId != null ? requestId : traceId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
+        this.traceId = requestId;
     }
 
     public int getStatus() {
@@ -36,19 +69,12 @@ public class ErrorResponse {
     }
 
     public String getError() {
-        return error;
+        return error != null ? error : code;
     }
 
     public void setError(String error) {
         this.error = error;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public void setMessage(String message) {
-        this.message = message;
+        this.code = error;
     }
 
     public String getPath() {
@@ -60,11 +86,12 @@ public class ErrorResponse {
     }
 
     public String getTraceId() {
-        return traceId;
+        return traceId != null ? traceId : requestId;
     }
 
     public void setTraceId(String traceId) {
         this.traceId = traceId;
+        this.requestId = traceId;
     }
 
     public List<String> getDetails() {

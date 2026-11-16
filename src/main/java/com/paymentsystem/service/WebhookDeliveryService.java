@@ -130,6 +130,9 @@ public class WebhookDeliveryService {
         headers.put("X-ApexPay-Event-Id", event.getEventId());
         headers.put("X-ApexPay-Timestamp", String.valueOf(timestampEpochSeconds));
         headers.put("X-ApexPay-Signature", signature);
+        if (event.getRequestId() != null) {
+            headers.put("X-Request-Id", event.getRequestId());
+        }
 
         logger.info("[OUTBOX DISPATCH] Sending webhook event {} (type: {}, attempt: {}) to destination host",
                 event.getEventId(), event.getEventType(), event.getAttemptCount() + 1);

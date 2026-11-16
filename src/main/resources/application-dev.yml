@@ -27,6 +27,8 @@ management:
       enabled: false
 
 logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p [%X{requestId:-}] [%thread] %logger{40} : %msg%n"
   level:
     root: INFO
     com.paymentsystem: INFO

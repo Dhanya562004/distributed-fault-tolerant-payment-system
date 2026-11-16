@@ -345,6 +345,7 @@ class PaymentPaginationIntegrationTest {
 
         // 1. First execution -> 201 Created without Idempotent-Replayed header
         mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", "IDEM_INTEG_TEST_5")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
@@ -354,6 +355,7 @@ class PaymentPaginationIntegrationTest {
 
         // 2. Replay execution -> 201 Created with Idempotent-Replayed: true header
         mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", "IDEM_INTEG_TEST_5")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))

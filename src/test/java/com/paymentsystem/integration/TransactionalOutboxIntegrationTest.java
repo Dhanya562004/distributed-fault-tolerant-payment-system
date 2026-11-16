@@ -41,6 +41,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("dev")
 public class TransactionalOutboxIntegrationTest {
 
+    private static final String API_KEY = "apexpay_admin_secret_key_2026";
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -70,7 +72,7 @@ public class TransactionalOutboxIntegrationTest {
     }
 
     @Test
-    @DisplayName("1. Successful payment atomically creates exactly one outbox event in same database transaction")
+    @DisplayName("1. Successful payment atomically creates exactly one outbox event in same database transaction carrying requestId")
     void testSuccessfulPayment_CreatesOutboxEventAtomically() throws Exception {
         String userCode = "USR_OUTBOX_1_" + System.currentTimeMillis();
         String idempotencyKey = "IDEM_OUTBOX_1_" + System.currentTimeMillis();
@@ -78,17 +80,21 @@ public class TransactionalOutboxIntegrationTest {
         // Create user
         CreateUserRequest userReq = new CreateUserRequest(userCode, "Outbox User", userCode.toLowerCase() + "@test.com", 100000L);
         mockMvc.perform(post("/api/v1/users")
+                .header("X-Api-Key", API_KEY)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(userReq)))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andExpect(header().exists("X-Request-Id"));
 
         // Process payment
         InitiatePaymentRequest payReq = new InitiatePaymentRequest(idempotencyKey, userCode, 15000L, "USD", "CREDIT_CARD", "Outbox Test Payment");
         MvcResult payResult = mockMvc.perform(post("/api/v1/payments")
+                .header("X-Api-Key", API_KEY)
                 .header("X-Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(payReq)))
                 .andExpect(status().isCreated())
+                .andExpect(header().exists("X-Request-Id"))
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andReturn();
 
@@ -104,6 +110,7 @@ public class TransactionalOutboxIntegrationTest {
         assertEquals(payment.getPaymentId(), event.getAggregateId());
         assertEquals(OutboxStatus.PENDING, event.getStatus());
         assertEquals(0, event.getAttemptCount());
+        assertNotNull(event.getRequestId(), "Outbox event must carry the requestId");
         assertTrue(event.getPayload().contains(payment.getPaymentId()));
         assertTrue(event.getPayload().contains("payment.succeeded"));
     }
@@ -117,6 +124,7 @@ public class TransactionalOutboxIntegrationTest {
         // Create user
         CreateUserRequest userReq = new CreateUserRequest(userCode, "Outbox User 2", userCode.toLowerCase() + "@test.com", 100000L);
         mockMvc.perform(post("/api/v1/users")
+                .header("X-Api-Key", API_KEY)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(userReq)))
                 .andExpect(status().isCreated());
@@ -124,6 +132,7 @@ public class TransactionalOutboxIntegrationTest {
         // Initial payment
         InitiatePaymentRequest payReq = new InitiatePaymentRequest(idempotencyKey, userCode, 20000L, "USD", "CREDIT_CARD", "Initial payment");
         MvcResult payResult = mockMvc.perform(post("/api/v1/payments")
+                .header("X-Api-Key", API_KEY)
                 .header("X-Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(payReq)))
@@ -135,6 +144,7 @@ public class TransactionalOutboxIntegrationTest {
 
         // Cached replay
         mockMvc.perform(post("/api/v1/payments")
+                .header("X-Api-Key", API_KEY)
                 .header("X-Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(payReq)))
@@ -156,6 +166,7 @@ public class TransactionalOutboxIntegrationTest {
         // Submit payment with invalid negative amount -> 400 Bad Request
         InitiatePaymentRequest payReq = new InitiatePaymentRequest(idempotencyKey, userCode, -10000L, "USD", "CREDIT_CARD", "Negative");
         mockMvc.perform(post("/api/v1/payments")
+                .header("X-Api-Key", API_KEY)
                 .header("X-Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(payReq)))
@@ -175,6 +186,7 @@ public class TransactionalOutboxIntegrationTest {
         // Create user
         CreateUserRequest userReq = new CreateUserRequest(userCode, "Refund Customer", userCode.toLowerCase() + "@test.com", 50000L);
         mockMvc.perform(post("/api/v1/users")
+                .header("X-Api-Key", API_KEY)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(userReq)))
                 .andExpect(status().isCreated());
@@ -182,6 +194,7 @@ public class TransactionalOutboxIntegrationTest {
         // Payment
         InitiatePaymentRequest payReq = new InitiatePaymentRequest(payIdemKey, userCode, 10000L, "USD", "CREDIT_CARD", "Payment to refund");
         MvcResult payResult = mockMvc.perform(post("/api/v1/payments")
+                .header("X-Api-Key", API_KEY)
                 .header("X-Idempotency-Key", payIdemKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(payReq)))
@@ -193,6 +206,7 @@ public class TransactionalOutboxIntegrationTest {
         // Process refund
         ProcessRefundRequest refundReq = new ProcessRefundRequest(payment.getPaymentId(), refIdemKey, 5000L, "Item returned");
         MvcResult refundResult = mockMvc.perform(post("/api/v1/refunds")
+                .header("X-Api-Key", API_KEY)
                 .header("X-Idempotency-Key", refIdemKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(refundReq)))
@@ -207,6 +221,7 @@ public class TransactionalOutboxIntegrationTest {
         List<OutboxEvent> refundEvents = outboxEventRepository.findByAggregateId(refund.getRefundId());
         assertEquals(1, refundEvents.size(), "Committed refund must create exactly one refund.succeeded outbox event");
         assertEquals("refund.succeeded", refundEvents.get(0).getEventType());
+        assertNotNull(refundEvents.get(0).getRequestId(), "Refund outbox event must carry the requestId");
         assertTrue(refundEvents.get(0).getPayload().contains(refund.getRefundId()));
     }
 
@@ -220,6 +235,7 @@ public class TransactionalOutboxIntegrationTest {
         OutboxEvent event = new OutboxEvent(
                 "evt_dispatch_test", "payment.succeeded", "PAY_TEST_001", "{\"status\":\"SUCCESS\"}", 5, Instant.now()
         );
+        event.setRequestId("req_dispatch_test_123");
         outboxEventRepository.saveAndFlush(event);
 
         deliveryService.setSigningSecret("whsec_secret_123");
@@ -242,6 +258,7 @@ public class TransactionalOutboxIntegrationTest {
 
         CreateUserRequest userReq = new CreateUserRequest(userCode, "Independent Payment", userCode.toLowerCase() + "@test.com", 50000L);
         mockMvc.perform(post("/api/v1/users")
+                .header("X-Api-Key", API_KEY)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(userReq)))
                 .andExpect(status().isCreated());
@@ -249,6 +266,7 @@ public class TransactionalOutboxIntegrationTest {
         // Payment processes successfully
         InitiatePaymentRequest payReq = new InitiatePaymentRequest(idempotencyKey, userCode, 10000L, "USD", "CREDIT_CARD", "Payment");
         MvcResult payResult = mockMvc.perform(post("/api/v1/payments")
+                .header("X-Api-Key", API_KEY)
                 .header("X-Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(payReq)))

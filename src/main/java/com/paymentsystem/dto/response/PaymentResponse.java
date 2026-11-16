@@ -19,6 +19,7 @@ public class PaymentResponse {
     private Instant createdAt;
     private Instant updatedAt;
     private Boolean isCachedIdempotentResponse;
+    private String requestId;
 
     public PaymentResponse() {
     }
@@ -125,5 +126,13 @@ public class PaymentResponse {
 
     public void setIsCachedIdempotentResponse(Boolean isCachedIdempotentResponse) {
         this.isCachedIdempotentResponse = isCachedIdempotentResponse;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
     }
 }
