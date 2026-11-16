@@ -14,7 +14,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.math.BigDecimal;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -52,7 +51,7 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
     @DisplayName("PostgreSQL Optimistic Locking: Competing transaction on User @Version throws OptimisticLockingFailureException")
     void testUserOptimisticLocking_ThrowsOptimisticLockException() {
         String userCode = "USR_OPT_" + System.currentTimeMillis();
-        BigDecimal initialBalance = new BigDecimal("1000.0000");
+        Long initialBalance = 100000L;
 
         // 1. Setup user in PostgreSQL with version 0
         User initialUser = new User(userCode, "Optimistic Test User", userCode + "@pg.test", initialBalance);
@@ -66,7 +65,7 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
         txA.execute(status -> {
             User userA = userRepository.findByUserCode(userCode).orElseThrow();
             assertEquals(initialVersion, userA.getVersion());
-            userA.setBalance(new BigDecimal("900.0000"));
+            userA.setBalance(90000L);
             userRepository.saveAndFlush(userA);
             return null;
         });
@@ -74,13 +73,13 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
         // Verify version incremented in PostgreSQL to initialVersion + 1
         User committedUser = userRepository.findByUserCode(userCode).orElseThrow();
         assertEquals(initialVersion + 1, committedUser.getVersion(), "PostgreSQL version must increment after Tx A commits");
-        assertEquals(0, new BigDecimal("900.0000").compareTo(committedUser.getBalance()));
+        assertEquals(90000L, committedUser.getBalance());
 
         // 3. Transaction B attempts to save the original stale entity (holding version 0)
         TransactionTemplate txB = new TransactionTemplate(transactionManager);
         txB.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
-        savedUser.setBalance(new BigDecimal("800.0000")); // Stale update attempt
+        savedUser.setBalance(80000L); // Stale update attempt
 
         assertThrows(OptimisticLockingFailureException.class, () -> {
             txB.execute(status -> {
@@ -92,14 +91,14 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
         // 4. Verify PostgreSQL data integrity remained intact
         User finalUser = userRepository.findByUserCode(userCode).orElseThrow();
         assertEquals(initialVersion + 1, finalUser.getVersion(), "Version should remain at Tx A's committed version");
-        assertEquals(0, new BigDecimal("900.0000").compareTo(finalUser.getBalance()), "Balance must remain at Tx A's committed value");
+        assertEquals(90000L, finalUser.getBalance(), "Balance must remain at Tx A's committed value");
     }
 
     @Test
     @DisplayName("PostgreSQL Optimistic Locking: Concurrent threads reading same version prevents second update")
     void testConcurrentThreadsOptimisticLocking_PreventsLostUpdate() throws Exception {
         String userCode = "USR_OPT_CONC_" + System.currentTimeMillis();
-        User initialUser = new User(userCode, "Concurrent Opt User", userCode + "@pg.test", new BigDecimal("1000.0000"));
+        User initialUser = new User(userCode, "Concurrent Opt User", userCode + "@pg.test", 100000L);
         userRepository.saveAndFlush(initialUser);
 
         CountDownLatch threadReadyLatch = new CountDownLatch(2);
@@ -123,7 +122,7 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
                     threadReadyLatch.countDown();
                     try {
                         startCommitLatch.await(5, TimeUnit.SECONDS);
-                        u1.setBalance(new BigDecimal("950.0000"));
+                        u1.setBalance(95000L);
                         userRepository.saveAndFlush(u1);
                         txASucceeded.set(true);
                     } catch (InterruptedException e) {
@@ -152,7 +151,7 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
                         // Deterministically await Tx 1 commit before attempting update
                         boolean tx1Committed = txACommittedLatch.await(5, TimeUnit.SECONDS);
                         assertTrue(tx1Committed, "Tx 1 must commit before Tx 2 attempts commit");
-                        u2.setBalance(new BigDecimal("900.0000"));
+                        u2.setBalance(90000L);
                         userRepository.saveAndFlush(u2);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
@@ -183,7 +182,7 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
 
         // Verify PostgreSQL row matches Tx A's update
         User finalUser = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("950.0000").compareTo(finalUser.getBalance()));
+        assertEquals(95000L, finalUser.getBalance());
     }
 
     @Test
@@ -191,7 +190,7 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
     void testPaymentTransactionOptimisticLocking() {
         String paymentId = "PAY_OPT_" + UUID.randomUUID().toString().substring(0, 8);
         PaymentTransaction tx = new PaymentTransaction(
-                paymentId, "IDEM_OPT_TX", "USR_DUMMY", new BigDecimal("50.0000"), "USD", "CREDIT_CARD", "Opt Tx Test"
+                paymentId, "IDEM_OPT_TX", "USR_DUMMY", 5000L, "USD", "CREDIT_CARD", "Opt Tx Test"
         );
         PaymentTransaction savedTx = paymentTransactionRepository.saveAndFlush(tx);
         Long initialLockVersion = savedTx.getLockVersion();

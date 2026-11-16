@@ -1,6 +1,5 @@
 package com.paymentsystem.worker;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 
 public class EventMessage {
@@ -9,7 +8,7 @@ public class EventMessage {
     private String paymentId;
     private String idempotencyKey;
     private String userId;
-    private BigDecimal amount;
+    private Long amount;
     private String currency;
     private String paymentMethod;
     private String description;
@@ -22,7 +21,7 @@ public class EventMessage {
         this.attemptCount = 0;
     }
 
-    public EventMessage(String eventId, String paymentId, String idempotencyKey, String userId, BigDecimal amount, String currency, String paymentMethod, String description) {
+    public EventMessage(String eventId, String paymentId, String idempotencyKey, String userId, Long amount, String currency, String paymentMethod, String description) {
         this.eventId = eventId;
         this.paymentId = paymentId;
         this.idempotencyKey = idempotencyKey;
@@ -68,11 +67,11 @@ public class EventMessage {
         this.userId = userId;
     }
 
-    public BigDecimal getAmount() {
+    public Long getAmount() {
         return amount;
     }
 
-    public void setAmount(BigDecimal amount) {
+    public void setAmount(Long amount) {
         this.amount = amount;
     }
 

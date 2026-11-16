@@ -86,13 +86,13 @@ The human project owner directed and governed the development lifecycle:
 
 ### Reported Automated Test Results
 
-The repository test suite consists of **167 total automated tests** across 24 test classes, structured into two execution tiers:
+The repository test suite consists of **172 total automated tests** across 25 test classes, structured into two execution tiers:
 
 | Test Execution Stage | Environment | Test Count | Status | Verified Evidence |
 | :--- | :--- | :---: | :---: | :--- |
-| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 129 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` (129 tests passed in 01:12 min). |
-| **Stage B: Concurrency & Real Database** | PostgreSQL 16 Testcontainers (Docker) | 38 | **Configured** (Docker-dependent) | 38 tests across 6 classes (including 3 new stuck-key recovery tests in `PostgreSqlIdempotencyTest`). Requires running Docker daemon (`mvn test -Ppostgres-it`). |
-| **Total Automated Suite** | Combined | **167** | **129 Passing locally (Docker-free), 38 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
+| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 134 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` (134 tests passed in 01:04 min). |
+| **Stage B: Concurrency & Real Database** | PostgreSQL 16 Testcontainers (Docker) | 38 | **Configured** (Docker-dependent) | 38 tests across 6 classes (including 3 stuck-key recovery tests in `PostgreSqlIdempotencyTest`). Requires running Docker daemon (`mvn test -Ppostgres-it`). |
+| **Total Automated Suite** | Combined | **172** | **134 Passing locally (Docker-free), 38 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
 
 ### Concurrency Stress Benchmark
 - **Test Implementation:** `ConcurrentPaymentTest` (H2) and `PostgreSqlConcurrencyStressTest` (PostgreSQL 16).
@@ -154,6 +154,10 @@ Transparency regarding AI-assisted development requires acknowledging key techni
    - *Correction*: Added `throws Exception` to the test method signature.
 3. **Queue Manager Multi-Instance Assumption (Item 3 Check)**:
    - *Clarification*: The README previously implied consistent hash queue partitioning was distributed across instances. Inspection confirmed `DistributedQueueManagerImpl` uses local in-memory `LinkedBlockingQueue` instances within a single JVM. Crash semantics mean any queued tasks in memory are lost, and per-user ordering cannot be maintained across multiple instances without an external broker. Updated docs and README Known Limits to accurately reflect this single-instance architectural limit.
+4. **Money Representation Minor Units Migration (Item 4)**:
+   - *Architecture*: Replaced `NUMERIC(19,4)` / `BigDecimal` with integer minor units (`BIGINT` in SQL, `Long` in Java), eliminating all floating-point rounding hazards. Added `currencies` table and `CurrencyService` tracking decimal precision (`USD`, `EUR`, `GBP`, `INR` = 2).
+   - *Mistake*: In `TransactionalOutboxIntegrationTest.java` and PostgreSQL Testcontainers classes, leftover unused `import java.math.BigDecimal;` imports and string-based comparisons (`0 == new BigDecimal("...").compareTo(...)`) initially lingered after converting DTOs.
+   - *Correction*: Systematically removed all `BigDecimal` references across all 96 source files and 28 test files, adopting primitive `long` equality and arithmetic checks (`assertEquals(expectedLong, actualLong)`). Added 5 unit tests in `CurrencyServiceTest` to verify currency retrieval, decimal place lookup, and ISO validation. All 134 fast tests pass.
 
 ---
 

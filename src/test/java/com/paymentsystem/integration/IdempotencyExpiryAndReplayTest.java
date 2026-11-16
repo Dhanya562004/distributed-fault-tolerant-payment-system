@@ -31,7 +31,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -92,7 +91,7 @@ public class IdempotencyExpiryAndReplayTest {
         clock.setInstant(BASE_TIME);
     }
 
-    private String createTestUser(BigDecimal initialBalance) throws Exception {
+    private String createTestUser(Long initialBalance) throws Exception {
         String userCode = "USR_TTL_" + System.nanoTime();
         CreateUserRequest userReq = new CreateUserRequest(userCode, "TTL Test User", userCode.toLowerCase() + "@test.com", initialBalance);
         mockMvc.perform(post("/api/v1/users")
@@ -105,11 +104,11 @@ public class IdempotencyExpiryAndReplayTest {
     @Test
     @DisplayName("1. New idempotency key creates a payment")
     void test1_NewIdempotencyKeyCreatesPayment() throws Exception {
-        String userCode = createTestUser(new BigDecimal("1000.00"));
+        String userCode = createTestUser(100000L);
         String key = "IDEM_TEST1_" + System.nanoTime();
 
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Initial payment"
+                key, userCode, 10000L, "USD", "CREDIT_CARD", "Initial payment"
         );
 
         MvcResult result = mockMvc.perform(post("/api/v1/payments")
@@ -124,7 +123,7 @@ public class IdempotencyExpiryAndReplayTest {
         assertNotNull(response.getPaymentId());
 
         User user = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("900.0000").compareTo(user.getBalance()));
+        assertEquals(90000L, user.getBalance());
 
         IdempotencyKeyRecord record = idempotencyKeyRepository.findByKeyValue(key).orElseThrow();
         assertEquals(IdempotencyKeyRecord.Status.COMPLETED, record.getStatus());
@@ -136,11 +135,11 @@ public class IdempotencyExpiryAndReplayTest {
     @Test
     @DisplayName("2. Duplicate request within 24 hours replays the response")
     void test2_DuplicateRequestWithin24HoursReplaysResponse() throws Exception {
-        String userCode = createTestUser(new BigDecimal("1000.00"));
+        String userCode = createTestUser(100000L);
         String key = "IDEM_TEST2_" + System.nanoTime();
 
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("150.00"), "USD", "CREDIT_CARD", "Original purchase"
+                key, userCode, 15000L, "USD", "CREDIT_CARD", "Original purchase"
         );
 
         // 1. Initial execution at T0
@@ -169,19 +168,19 @@ public class IdempotencyExpiryAndReplayTest {
         PaymentResponse replayedPayment = objectMapper.readValue(replayResult.getResponse().getContentAsString(), PaymentResponse.class);
         assertEquals(firstPayment.getPaymentId(), replayedPayment.getPaymentId());
 
-        // Balance must only be deducted ONCE: $1000 - $150 = $850
+        // Balance must only be deducted ONCE: 100000 - 15000 = 85000
         User user = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("850.0000").compareTo(user.getBalance()));
+        assertEquals(85000L, user.getBalance());
     }
 
     @Test
     @DisplayName("3. Cached replay includes Idempotent-Replayed: true header")
     void test3_CachedReplayIncludesIdempotentReplayedHeader() throws Exception {
-        String userCode = createTestUser(new BigDecimal("1000.00"));
+        String userCode = createTestUser(100000L);
         String key = "IDEM_TEST3_" + System.nanoTime();
 
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("75.00"), "USD", "CREDIT_CARD", "Test replay header"
+                key, userCode, 7500L, "USD", "CREDIT_CARD", "Test replay header"
         );
 
         // Initial execution
@@ -207,11 +206,11 @@ public class IdempotencyExpiryAndReplayTest {
     @Test
     @DisplayName("4. Original payment does not include the replay=true header")
     void test4_OriginalPaymentDoesNotIncludeReplayHeader() throws Exception {
-        String userCode = createTestUser(new BigDecimal("1000.00"));
+        String userCode = createTestUser(100000L);
         String key = "IDEM_TEST4_" + System.nanoTime();
 
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("60.00"), "USD", "CREDIT_CARD", "Fresh payment"
+                key, userCode, 6000L, "USD", "CREDIT_CARD", "Fresh payment"
         );
 
         // Fresh payment must NOT return Idempotent-Replayed header
@@ -227,11 +226,11 @@ public class IdempotencyExpiryAndReplayTest {
     @Test
     @DisplayName("5. Different payload with an unexpired key is rejected")
     void test5_DifferentPayloadWithUnexpiredKeyIsRejected() throws Exception {
-        String userCode = createTestUser(new BigDecimal("1000.00"));
+        String userCode = createTestUser(100000L);
         String key = "IDEM_TEST5_" + System.nanoTime();
 
         InitiatePaymentRequest originalReq = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Original payload"
+                key, userCode, 10000L, "USD", "CREDIT_CARD", "Original payload"
         );
 
         mockMvc.perform(post("/api/v1/payments")
@@ -245,7 +244,7 @@ public class IdempotencyExpiryAndReplayTest {
 
         // Tampered payload with same key
         InitiatePaymentRequest tamperedReq = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("200.00"), "USD", "CREDIT_CARD", "Tampered payload"
+                key, userCode, 20000L, "USD", "CREDIT_CARD", "Tampered payload"
         );
 
         mockMvc.perform(post("/api/v1/payments")
@@ -258,17 +257,17 @@ public class IdempotencyExpiryAndReplayTest {
 
         // Balance deducted only once for the original payment
         User user = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("900.0000").compareTo(user.getBalance()));
+        assertEquals(90000L, user.getBalance());
     }
 
     @Test
     @DisplayName("6. Key expires exactly at the configured expiry boundary")
     void test6_KeyExpiresExactlyAtConfiguredExpiryBoundary() throws Exception {
-        String userCode = createTestUser(new BigDecimal("1000.00"));
+        String userCode = createTestUser(100000L);
         String key = "IDEM_TEST6_" + System.nanoTime();
 
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("50.00"), "USD", "CREDIT_CARD", "Boundary test"
+                key, userCode, 5000L, "USD", "CREDIT_CARD", "Boundary test"
         );
 
         mockMvc.perform(post("/api/v1/payments")
@@ -296,11 +295,11 @@ public class IdempotencyExpiryAndReplayTest {
     @Test
     @DisplayName("7. Expired key can be reused for a new request")
     void test7_ExpiredKeyCanBeReusedForNewRequest() throws Exception {
-        String userCode = createTestUser(new BigDecimal("1000.00"));
+        String userCode = createTestUser(100000L);
         String key = "IDEM_TEST7_" + System.nanoTime();
 
         InitiatePaymentRequest firstReq = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Day 1 purchase"
+                key, userCode, 10000L, "USD", "CREDIT_CARD", "Day 1 purchase"
         );
 
         MvcResult firstResult = mockMvc.perform(post("/api/v1/payments")
@@ -317,7 +316,7 @@ public class IdempotencyExpiryAndReplayTest {
 
         // Submit new payment reusing the expired key (different amount)
         InitiatePaymentRequest secondReq = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("200.00"), "USD", "CREDIT_CARD", "Day 2 purchase with reused key"
+                key, userCode, 20000L, "USD", "CREDIT_CARD", "Day 2 purchase with reused key"
         );
 
         MvcResult secondResult = mockMvc.perform(post("/api/v1/payments")
@@ -334,9 +333,9 @@ public class IdempotencyExpiryAndReplayTest {
         // Verify distinct payment IDs were created
         assertNotEquals(firstPayment.getPaymentId(), secondPayment.getPaymentId());
 
-        // Verify both payments were charged: $1000 - $100 - $200 = $700
+        // Verify both payments were charged: 100000 - 10000 - 20000 = 70000
         User user = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("700.0000").compareTo(user.getBalance()));
+        assertEquals(70000L, user.getBalance());
 
         // Within 1 hour of the second payment (Day 2 + 1h), replay returns second payment
         clock.advance(Duration.ofHours(1));
@@ -352,12 +351,12 @@ public class IdempotencyExpiryAndReplayTest {
     @Test
     @DisplayName("8. Concurrent requests reusing an expired key cannot double-charge")
     void test8_ConcurrentRequestsReusingExpiredKeyCannotDoubleCharge() throws Exception {
-        String userCode = createTestUser(new BigDecimal("1000.00"));
+        String userCode = createTestUser(100000L);
         String key = "IDEM_TEST8_" + System.nanoTime();
 
         // 1. Initial payment
         InitiatePaymentRequest initialReq = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Day 1 payment"
+                key, userCode, 10000L, "USD", "CREDIT_CARD", "Day 1 payment"
         );
         PaymentResponse initialResp = paymentProcessingService.initiatePayment(initialReq);
         assertNotNull(initialResp.getPaymentId());
@@ -378,7 +377,7 @@ public class IdempotencyExpiryAndReplayTest {
         AtomicInteger unexpectedFailures = new AtomicInteger(0);
 
         InitiatePaymentRequest reuseReq = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("150.00"), "USD", "CREDIT_CARD", "Day 2 concurrent reuse"
+                key, userCode, 15000L, "USD", "CREDIT_CARD", "Day 2 concurrent reuse"
         );
 
         for (int i = 0; i < threads; i++) {
@@ -416,9 +415,9 @@ public class IdempotencyExpiryAndReplayTest {
         assertEquals(0, unexpectedFailures.get(), "Zero unexpected failures allowed");
         assertEquals(threads, originalCharges.get() + cachedReplays.get() + duplicateConflicts.get());
 
-        // Initial $100 + Reused $150 = $250 deducted. Final balance: $750
+        // Initial 10000 + Reused 15000 = 25000 deducted. Final balance: 75000
         User user = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("750.0000").compareTo(user.getBalance()));
+        assertEquals(75000L, user.getBalance());
 
         // Exactly 2 payments exist for this key in total
         List<PaymentTransaction> txs = paymentTransactionRepository.findAll().stream()
@@ -430,11 +429,11 @@ public class IdempotencyExpiryAndReplayTest {
     @Test
     @DisplayName("9. Expired-key cleanup preserves payment audit history")
     void test9_ExpiredKeyCleanupPreservesPaymentAuditHistory() throws Exception {
-        String userCode = createTestUser(new BigDecimal("1000.00"));
+        String userCode = createTestUser(100000L);
         String key = "IDEM_TEST9_" + System.nanoTime();
 
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("120.00"), "USD", "CREDIT_CARD", "Payment to be cleaned up"
+                key, userCode, 12000L, "USD", "CREDIT_CARD", "Payment to be cleaned up"
         );
 
         PaymentResponse payment = paymentProcessingService.initiatePayment(req);
@@ -453,7 +452,7 @@ public class IdempotencyExpiryAndReplayTest {
         // Payment record MUST still exist and remain in SUCCESS state
         PaymentTransaction tx = paymentTransactionRepository.findByPaymentId(payment.getPaymentId()).orElseThrow();
         assertEquals(PaymentStatus.SUCCESS, tx.getStatus());
-        assertEquals(new BigDecimal("120.0000").compareTo(tx.getAmount()), 0);
+        assertEquals(12000L, tx.getAmount());
 
         // Audit log MUST still exist
         var auditLogs = auditService.getLogsForPayment(payment.getPaymentId());
@@ -463,19 +462,19 @@ public class IdempotencyExpiryAndReplayTest {
     @Test
     @DisplayName("10. Existing refund and payment behavior remains correct")
     void test10_ExistingRefundAndPaymentBehaviorRemainsCorrect() throws Exception {
-        String userCode = createTestUser(new BigDecimal("1000.00"));
+        String userCode = createTestUser(100000L);
         String payKey = "IDEM_TEST10_PAY_" + System.nanoTime();
         String refKey = "IDEM_TEST10_REF_" + System.nanoTime();
 
         // 1. Process payment
         InitiatePaymentRequest payReq = new InitiatePaymentRequest(
-                payKey, userCode, new BigDecimal("200.00"), "USD", "CREDIT_CARD", "Payment for refund"
+                payKey, userCode, 20000L, "USD", "CREDIT_CARD", "Payment for refund"
         );
         PaymentResponse payResp = paymentProcessingService.initiatePayment(payReq);
 
         // 2. Process refund (initial execution)
         ProcessRefundRequest refReq = new ProcessRefundRequest(
-                payResp.getPaymentId(), refKey, new BigDecimal("50.00"), "Partial refund"
+                payResp.getPaymentId(), refKey, 5000L, "Partial refund"
         );
 
         MvcResult firstRefResult = mockMvc.perform(post("/api/v1/refunds")
@@ -497,19 +496,19 @@ public class IdempotencyExpiryAndReplayTest {
                 .andExpect(header().string("Idempotent-Replayed", "true"))
                 .andExpect(jsonPath("$.refundId").value(refResp.getRefundId()));
 
-        // Refunded $50 restored: $1000 - $200 + $50 = $850
+        // Refunded 5000 restored: 100000 - 20000 + 5000 = 85000
         User user = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("850.0000").compareTo(user.getBalance()));
+        assertEquals(85000L, user.getBalance());
     }
 
     @Test
     @DisplayName("11. Concurrent duplicate requests returning HTTP 409 do not include Idempotent-Replayed header")
     void test11_ConcurrentDuplicateRequestReturns409WithoutReplayHeader() throws Exception {
-        String userCode = createTestUser(new BigDecimal("1000.00"));
+        String userCode = createTestUser(100000L);
         String key = "IDEM_TEST11_" + System.nanoTime();
 
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "In progress test"
+                key, userCode, 10000L, "USD", "CREDIT_CARD", "In progress test"
         );
 
         // Simulate an in-progress idempotency key record in database
@@ -551,25 +550,25 @@ public class IdempotencyExpiryAndReplayTest {
     @Test
     @DisplayName("13. Stuck IN_PROGRESS key with successful payment is recovered as COMPLETED without double-charging")
     void test13_StuckKeyWithSuccessfulPayment_RecoveredAsCompletedWithoutDoubleCharge() throws Exception {
-        String userCode = createTestUser(new BigDecimal("1000.00"));
+        String userCode = createTestUser(100000L);
         String key = "IDEM_STUCK_PAID_" + System.nanoTime();
         Instant pastTime = clock.instant().minus(Duration.ofMinutes(5));
 
         // Deduct balance manually (simulating crash after payment succeeded)
         User user = userRepository.findByUserCode(userCode).orElseThrow();
-        user.setBalance(new BigDecimal("900.00"));
+        user.setBalance(90000L);
         userRepository.saveAndFlush(user);
 
         // Persist payment transaction
         String paymentId = "PAY_RECOVERED_" + System.nanoTime();
         PaymentTransaction tx = new PaymentTransaction(
-                paymentId, key, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Recovered test payment"
+                paymentId, key, userCode, 10000L, "USD", "CREDIT_CARD", "Recovered test payment"
         );
         tx.setStatus(PaymentStatus.SUCCESS);
         paymentTransactionRepository.saveAndFlush(tx);
 
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Recovered test payment"
+                key, userCode, 10000L, "USD", "CREDIT_CARD", "Recovered test payment"
         );
         String requestHash = idempotencyService.computePayloadHash(req);
 
@@ -595,7 +594,7 @@ public class IdempotencyExpiryAndReplayTest {
         assertEquals(PaymentStatus.SUCCESS, response.getStatus());
 
         User userAfter = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("900.0000").compareTo(userAfter.getBalance()), "Balance must NOT be charged again");
+        assertEquals(90000L, userAfter.getBalance(), "Balance must NOT be charged again");
     }
 
     @Test

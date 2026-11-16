@@ -1,7 +1,6 @@
 package com.paymentsystem.entity;
 
 import jakarta.persistence.*;
-import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
@@ -24,8 +23,8 @@ public class RefundTransaction {
     @Column(name = "user_id", nullable = false, length = 64)
     private String userId;
 
-    @Column(name = "amount", nullable = false, precision = 19, scale = 4)
-    private BigDecimal amount;
+    @Column(name = "amount", nullable = false)
+    private Long amount;
 
     @Column(name = "status", nullable = false, length = 32)
     @Enumerated(EnumType.STRING)
@@ -40,7 +39,7 @@ public class RefundTransaction {
     public RefundTransaction() {
     }
 
-    public RefundTransaction(String refundId, String paymentId, String userId, BigDecimal amount, PaymentStatus status, String reason) {
+    public RefundTransaction(String refundId, String paymentId, String userId, Long amount, PaymentStatus status, String reason) {
         this.refundId = refundId;
         this.paymentId = paymentId;
         this.userId = userId;
@@ -86,11 +85,11 @@ public class RefundTransaction {
         this.userId = userId;
     }
 
-    public BigDecimal getAmount() {
+    public Long getAmount() {
         return amount;
     }
 
-    public void setAmount(BigDecimal amount) {
+    public void setAmount(Long amount) {
         this.amount = amount;
     }
 

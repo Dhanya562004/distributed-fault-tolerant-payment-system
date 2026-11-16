@@ -18,7 +18,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -68,8 +67,8 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
     void testAcquireNewKey_Success() {
         String userCode = "USR_PG_NEW_" + System.currentTimeMillis();
         String idempotencyKey = "IDEM_PG_NEW_" + UUID.randomUUID();
-        BigDecimal initialBalance = new BigDecimal("1000.0000");
-        BigDecimal paymentAmount = new BigDecimal("150.0000");
+        Long initialBalance = 100000L;
+        Long paymentAmount = 15000L;
 
         userRepository.saveAndFlush(new User(userCode, "New PG User", userCode + "@pg.test", initialBalance));
 
@@ -97,7 +96,7 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
         assertEquals(PaymentStatus.SUCCESS, txList.get(0).getStatus());
 
         User updatedUser = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("850.0000").compareTo(updatedUser.getBalance()), "Balance must be deducted by charge amount");
+        assertEquals(85000L, updatedUser.getBalance(), "Balance must be deducted by charge amount");
     }
 
     @Test
@@ -105,7 +104,7 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
     void testReusingInProgressKey_ProducesConflict() {
         String key = "IDEM_PG_IN_PROGRESS_" + UUID.randomUUID();
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                key, "USR_DUMMY", new BigDecimal("100.00"), "USD", "CREDIT_CARD", "In-progress conflict test"
+                key, "USR_DUMMY", 10000L, "USD", "CREDIT_CARD", "In-progress conflict test"
         );
 
         String hash = idempotencyService.computePayloadHash(req);
@@ -124,8 +123,8 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
     void testCompletedPayment_ReturnsCachedResponse() {
         String userCode = "USR_PG_CACHE_" + System.currentTimeMillis();
         String idempotencyKey = "IDEM_PG_CACHE_" + UUID.randomUUID();
-        BigDecimal initialBalance = new BigDecimal("2000.0000");
-        BigDecimal paymentAmount = new BigDecimal("250.0000");
+        Long initialBalance = 200000L;
+        Long paymentAmount = 25000L;
 
         userRepository.saveAndFlush(new User(userCode, "Cache User", userCode + "@pg.test", initialBalance));
 
@@ -141,7 +140,7 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
 
         // Check balance after first charge
         User userAfterFirst = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("1750.0000").compareTo(userAfterFirst.getBalance()));
+        assertEquals(175000L, userAfterFirst.getBalance());
 
         // 2. Replay with identical key and payload
         PaymentResponse response2 = paymentProcessingService.initiatePayment(req);
@@ -152,7 +151,7 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
 
         // 3. Verify PostgreSQL balance was NOT deducted again
         User userAfterSecond = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("1750.0000").compareTo(userAfterSecond.getBalance()), "Balance must NOT decrease on cached replay!");
+        assertEquals(175000L, userAfterSecond.getBalance(), "Balance must NOT decrease on cached replay!");
 
         // 4. Verify DB contains only 1 payment transaction
         long txCount = paymentTransactionRepository.findAll().stream()
@@ -167,17 +166,17 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
         String userCode = "USR_PG_MISMATCH_" + System.currentTimeMillis();
         String idempotencyKey = "IDEM_PG_MISMATCH_" + UUID.randomUUID();
 
-        userRepository.saveAndFlush(new User(userCode, "Mismatch User", userCode + "@pg.test", new BigDecimal("5000.0000")));
+        userRepository.saveAndFlush(new User(userCode, "Mismatch User", userCode + "@pg.test", 500000L));
 
         InitiatePaymentRequest initialReq = new InitiatePaymentRequest(
-                idempotencyKey, userCode, new BigDecimal("100.0000"), "USD", "CREDIT_CARD", "Initial payment"
+                idempotencyKey, userCode, 10000L, "USD", "CREDIT_CARD", "Initial payment"
         );
         PaymentResponse firstResponse = paymentProcessingService.initiatePayment(initialReq);
         assertEquals(PaymentStatus.SUCCESS, firstResponse.getStatus());
 
         // Attempt same key with modified amount ($999.00 instead of $100.00)
         InitiatePaymentRequest conflictingReq = new InitiatePaymentRequest(
-                idempotencyKey, userCode, new BigDecimal("999.0000"), "USD", "CREDIT_CARD", "Tampered conflicting payload"
+                idempotencyKey, userCode, 99900L, "USD", "CREDIT_CARD", "Tampered conflicting payload"
         );
 
         assertThrows(PayloadMismatchException.class, () -> {
@@ -191,8 +190,8 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
         int threads = 20;
         String userCode = "USR_PG_CONC_" + System.currentTimeMillis();
         String idempotencyKey = "IDEM_PG_CONC_" + UUID.randomUUID();
-        BigDecimal initialBalance = new BigDecimal("1000.0000");
-        BigDecimal paymentAmount = new BigDecimal("100.0000");
+        Long initialBalance = 100000L;
+        Long paymentAmount = 10000L;
 
         userRepository.saveAndFlush(new User(userCode, "Conc User", userCode + "@pg.test", initialBalance));
 
@@ -252,7 +251,7 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
         assertEquals(1, transactions.size(), "PostgreSQL must contain exactly 1 transaction row for the key");
 
         User finalUser = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("900.0000").compareTo(finalUser.getBalance()), "User balance in PostgreSQL must be deducted EXACTLY ONCE ($1000 -> $900)");
+        assertEquals(90000L, finalUser.getBalance(), "User balance in PostgreSQL must be deducted EXACTLY ONCE ($1000 -> $900)");
 
         IdempotencyKeyRecord record = idempotencyKeyRepository.findByKeyValue(idempotencyKey).orElseThrow();
         assertEquals(IdempotencyKeyRecord.Status.COMPLETED, record.getStatus());
@@ -265,11 +264,11 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
         String userCode = "USR_PG_EXP_" + UUID.randomUUID().toString().substring(0, 8);
         String idempotencyKey = "IDEM_PG_EXP_" + System.nanoTime();
 
-        userRepository.save(new User(userCode, "PG Expiry User", "pgexp@apexpay.com", new BigDecimal("1000.00")));
+        userRepository.save(new User(userCode, "PG Expiry User", "pgexp@apexpay.com", 100000L));
 
         // 1. Initial Payment
         InitiatePaymentRequest req1 = new InitiatePaymentRequest(
-                idempotencyKey, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Initial PG charge"
+                idempotencyKey, userCode, 10000L, "USD", "CREDIT_CARD", "Initial PG charge"
         );
         PaymentResponse resp1 = paymentProcessingService.initiatePayment(req1);
         assertNotNull(resp1.getPaymentId());
@@ -282,7 +281,7 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
 
         // 3. Reuse the expired key with a new payment request
         InitiatePaymentRequest req2 = new InitiatePaymentRequest(
-                idempotencyKey, userCode, new BigDecimal("250.00"), "USD", "CREDIT_CARD", "Subsequent PG charge after expiry"
+                idempotencyKey, userCode, 25000L, "USD", "CREDIT_CARD", "Subsequent PG charge after expiry"
         );
         PaymentResponse resp2 = paymentProcessingService.initiatePayment(req2);
 
@@ -293,7 +292,7 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
 
         // Verify balance in PostgreSQL: $1000 - $100 - $250 = $650
         User finalUser = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("650.0000").compareTo(finalUser.getBalance()));
+        assertEquals(65000L, finalUser.getBalance());
 
         // Exactly 2 transactions exist in PostgreSQL
         List<PaymentTransaction> txs = paymentTransactionRepository.findAll().stream()
@@ -308,11 +307,11 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
         String userCode = "USR_PG_CEXP_" + UUID.randomUUID().toString().substring(0, 8);
         String idempotencyKey = "IDEM_PG_CEXP_" + System.nanoTime();
 
-        userRepository.save(new User(userCode, "PG Concur Expiry User", "pgcexp@apexpay.com", new BigDecimal("1000.00")));
+        userRepository.save(new User(userCode, "PG Concur Expiry User", "pgcexp@apexpay.com", 100000L));
 
         // 1. Initial payment
         InitiatePaymentRequest initialReq = new InitiatePaymentRequest(
-                idempotencyKey, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Day 1 payment"
+                idempotencyKey, userCode, 10000L, "USD", "CREDIT_CARD", "Day 1 payment"
         );
         PaymentResponse initialResp = paymentProcessingService.initiatePayment(initialReq);
         assertNotNull(initialResp.getPaymentId());
@@ -335,7 +334,7 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
         AtomicInteger unexpectedFailures = new AtomicInteger(0);
 
         InitiatePaymentRequest reuseReq = new InitiatePaymentRequest(
-                idempotencyKey, userCode, new BigDecimal("200.00"), "USD", "CREDIT_CARD", "Day 2 concurrent reuse"
+                idempotencyKey, userCode, 20000L, "USD", "CREDIT_CARD", "Day 2 concurrent reuse"
         );
 
         for (int i = 0; i < threads; i++) {
@@ -375,7 +374,7 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
 
         // Initial $100 + Reused $200 = $300 deducted. Final balance in PostgreSQL: $700
         User finalUser = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("700.0000").compareTo(finalUser.getBalance()));
+        assertEquals(70000L, finalUser.getBalance());
 
         // Exactly 2 transactions exist for this key in PostgreSQL
         List<PaymentTransaction> txs = paymentTransactionRepository.findAll().stream()
@@ -406,8 +405,8 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
     @DisplayName("PostgreSQL Stuck Key Recovery: Stuck key with successful payment is marked COMPLETED without double-charging")
     void testPostgreSqlStuckKeyWithSuccessfulPayment_RecoveredAsCompletedWithoutDoubleCharge() {
         String userCode = "USR_PG_REC_" + System.nanoTime();
-        User user = new User(userCode, "PG User", userCode + "@example.com", new BigDecimal("1000.00"));
-        user.setBalance(new BigDecimal("900.00"));
+        User user = new User(userCode, "PG User", userCode + "@example.com", 100000L);
+        user.setBalance(90000L);
         userRepository.saveAndFlush(user);
 
         String key = "PG_STUCK_PAID_" + System.nanoTime();
@@ -415,13 +414,13 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
 
         String paymentId = "PAY_PG_REC_" + System.nanoTime();
         PaymentTransaction tx = new PaymentTransaction(
-                paymentId, key, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "PG Recovered payment"
+                paymentId, key, userCode, 10000L, "USD", "CREDIT_CARD", "PG Recovered payment"
         );
         tx.setStatus(PaymentStatus.SUCCESS);
         paymentTransactionRepository.saveAndFlush(tx);
 
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                key, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "PG Recovered payment"
+                key, userCode, 10000L, "USD", "CREDIT_CARD", "PG Recovered payment"
         );
         String requestHash = idempotencyService.computePayloadHash(req);
 
@@ -443,7 +442,7 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
         assertEquals(PaymentStatus.SUCCESS, response.getStatus());
 
         User userAfter = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("900.00").compareTo(userAfter.getBalance()), "PostgreSQL balance must NOT be double-charged");
+        assertEquals(90000L, userAfter.getBalance(), "PostgreSQL balance must NOT be double-charged");
     }
 
     @Test

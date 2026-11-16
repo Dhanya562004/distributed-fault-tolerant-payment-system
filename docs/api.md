@@ -161,7 +161,7 @@ The following endpoints are **completely safe to test** in the live cloud deploy
   ```json
   {
     "userId": "USR_ALICE",
-    "amount": 100.00,
+    "amount": 10000,
     "currency": "USD",
     "paymentMethod": "CREDIT_CARD",
     "description": "Cloud hosting renewal",
@@ -184,7 +184,7 @@ The following endpoints are **completely safe to test** in the live cloud deploy
   ```json
   {
     "paymentId": "PAY_A1B2C3D4E5F67890",
-    "amount": 50.00,
+    "amount": 5000,
     "reason": "Customer cancellation"
   }
   ```

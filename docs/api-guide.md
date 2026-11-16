@@ -14,6 +14,7 @@
 The system exposes RESTful APIs designed according to enterprise banking standards. All endpoints conform to:
 
 - **JSON Payloads**: Request and response bodies are serialized in JSON UTF-8.
+- **Minor Units Representation**: All monetary `amount` values are integers expressed in the smallest currency unit (e.g., cents for USD/EUR/GBP, paise for INR: `$250.00` is represented as `25000`). Never float or double. Supported currencies and their decimal places are configured in the `currencies` table (`USD`, `EUR`, `GBP`, `INR` = 2).
 - **Idempotency Guarantees**: Mutation endpoints (`POST /api/v1/payments`, `POST /api/v1/refunds`) accept an `X-Idempotency-Key` HTTP header.
 - **24-Hour Retention Period**: Idempotency keys have a configurable 24-hour retention period (`app.idempotency.retention-hours: 24`). Re-submitting an identical request within this window returns the original cached response.
 - **`Idempotent-Replayed: true` Header**: When a completed payment or refund response is served from the cache, the HTTP response includes `Idempotent-Replayed: true`. Original executions do NOT return this header.
@@ -34,7 +35,7 @@ Content-Type: application/json
 
 {
   "userId": "USR_ALICE",
-  "amount": 250.00,
+  "amount": 25000,
   "currency": "USD",
   "paymentMethod": "CREDIT_CARD",
   "description": "Enterprise software license"
@@ -50,7 +51,7 @@ Content-Type: application/json
   "paymentId": "PAY_A1B2C3D4E5F67890",
   "idempotencyKey": "IDEM_TX_20261018_001",
   "userId": "USR_ALICE",
-  "amount": 250.00,
+  "amount": 25000,
   "currency": "USD",
   "status": "SUCCESS",
   "paymentMethod": "CREDIT_CARD",
@@ -72,7 +73,7 @@ Content-Type: application/json
 
 {
   "userId": "USR_ALICE",
-  "amount": 250.00,
+  "amount": 25000,
   "currency": "USD",
   "paymentMethod": "CREDIT_CARD",
   "description": "Enterprise software license"
@@ -89,7 +90,7 @@ Content-Type: application/json
   "paymentId": "PAY_A1B2C3D4E5F67890",
   "idempotencyKey": "IDEM_TX_20261018_001",
   "userId": "USR_ALICE",
-  "amount": 250.00,
+  "amount": 25000,
   "currency": "USD",
   "status": "SUCCESS",
   "paymentMethod": "CREDIT_CARD",
@@ -112,7 +113,7 @@ Content-Type: application/json
 
 {
   "userId": "USR_ALICE",
-  "amount": 300.00,
+  "amount": 30000,
   "currency": "USD",
   "paymentMethod": "CREDIT_CARD",
   "description": "Renewal after 24h"
@@ -128,7 +129,7 @@ Content-Type: application/json
   "paymentId": "PAY_F9E8D7C6B5A43210",
   "idempotencyKey": "IDEM_TX_20261018_001",
   "userId": "USR_ALICE",
-  "amount": 300.00,
+  "amount": 30000,
   "currency": "USD",
   "status": "SUCCESS",
   "paymentMethod": "CREDIT_CARD",
@@ -188,7 +189,7 @@ All error responses return a standardized schema:
 {
   "idempotencyKey": "IDEM_TX_20261010_001",
   "userId": "USR_ALICE",
-  "amount": 250.00,
+  "amount": 25000,
   "currency": "USD",
   "paymentMethod": "CREDIT_CARD",
   "description": "Enterprise cloud subscription",
@@ -202,7 +203,7 @@ All error responses return a standardized schema:
   "paymentId": "PAY_9B2C3D4E5F6A7B8C",
   "idempotencyKey": "IDEM_TX_20261010_001",
   "userId": "USR_ALICE",
-  "amount": 250.00,
+  "amount": 25000,
   "currency": "USD",
   "status": "SUCCESS",
   "paymentMethod": "CREDIT_CARD",
@@ -226,7 +227,7 @@ All error responses return a standardized schema:
 {
   "paymentId": "PAY_9B2C3D4E5F6A7B8C",
   "status": "SUCCESS",
-  "amount": 250.00,
+  "amount": 25000,
   "currency": "USD",
   "userId": "USR_ALICE"
 }
@@ -245,7 +246,7 @@ All error responses return a standardized schema:
     "paymentId": "PAY_9B2C3D4E5F6A7B8C",
     "idempotencyKey": "IDEM_TX_20261010_001",
     "userId": "USR_ALICE",
-    "amount": 250.00,
+    "amount": 25000,
     "status": "SUCCESS"
   }
 ]
@@ -265,7 +266,7 @@ All error responses return a standardized schema:
 {
   "paymentId": "PAY_9B2C3D4E5F6A7B8C",
   "idempotencyKey": "IDEM_REF_20261010_001",
-  "amount": 100.00,
+  "amount": 10000,
   "reason": "Customer item return"
 }
 ```
@@ -276,7 +277,7 @@ All error responses return a standardized schema:
   "refundId": "REF_1A2B3C4D5E6F7A8B",
   "paymentId": "PAY_9B2C3D4E5F6A7B8C",
   "userId": "USR_ALICE",
-  "amount": 100.00,
+  "amount": 10000,
   "status": "REFUNDED",
   "reason": "Customer item return",
   "createdAt": "2026-10-10T05:07:20.000Z"
@@ -372,7 +373,7 @@ X-Api-Key: apexpay_admin_secret_key_2026
       "id": "PAY_98F1A2B3C4D5E6F7",
       "paymentId": "PAY_98F1A2B3C4D5E6F7",
       "userId": "USR_ALICE",
-      "amount": 250.0000,
+      "amount": 25000,
       "currency": "USD",
       "status": "SUCCESS",
       "paymentMethod": "CREDIT_CARD",

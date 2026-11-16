@@ -1,10 +1,9 @@
 package com.paymentsystem.dto.request;
 
-import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import java.math.BigDecimal;
 
 public class CreateUserRequest {
 
@@ -19,13 +18,13 @@ public class CreateUserRequest {
     private String email;
 
     @NotNull(message = "Initial balance is required")
-    @DecimalMin(value = "0.00", message = "Balance cannot be negative")
-    private BigDecimal initialBalance;
+    @Min(value = 0, message = "Balance cannot be negative")
+    private Long initialBalance;
 
     public CreateUserRequest() {
     }
 
-    public CreateUserRequest(String userCode, String name, String email, BigDecimal initialBalance) {
+    public CreateUserRequest(String userCode, String name, String email, Long initialBalance) {
         this.userCode = userCode;
         this.name = name;
         this.email = email;
@@ -56,11 +55,11 @@ public class CreateUserRequest {
         this.email = email;
     }
 
-    public BigDecimal getInitialBalance() {
+    public Long getInitialBalance() {
         return initialBalance;
     }
 
-    public void setInitialBalance(BigDecimal initialBalance) {
+    public void setInitialBalance(Long initialBalance) {
         this.initialBalance = initialBalance;
     }
 }

@@ -19,7 +19,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -160,8 +159,8 @@ public class ConcurrentPaymentTest {
     private BenchmarkResult executeSingleStressBenchmark(int runIndex, int totalRequests, int workerCount) throws Exception {
         String userCode = "USR_BENCH_" + runIndex + "_" + System.nanoTime();
         String idempotencyKey = "IDEM_BENCH_" + runIndex + "_" + System.nanoTime();
-        BigDecimal initialBalance = new BigDecimal("1000.0000");
-        BigDecimal paymentAmount = new BigDecimal("100.0000");
+        Long initialBalance = 100000L;
+        Long paymentAmount = 10000L;
 
         // 1. Prepare isolated test user
         User testUser = new User(userCode, "Benchmark User " + runIndex, userCode.toLowerCase() + "@apexpay.test", initialBalance);
@@ -311,7 +310,7 @@ public class ConcurrentPaymentTest {
      * Validates database invariants to ensure zero double-spending, exactly one payment transaction,
      * and a consistent idempotency key record.
      */
-    private void validateDatabaseCorrectness(String userCode, String idempotencyKey, BigDecimal initialBalance, BigDecimal paymentAmount) {
+    private void validateDatabaseCorrectness(String userCode, String idempotencyKey, Long initialBalance, Long paymentAmount) {
         // Query payments table directly from DB
         List<PaymentTransaction> transactions = paymentTransactionRepository.findAll().stream()
                 .filter(tx -> idempotencyKey.equals(tx.getIdempotencyKey()))
@@ -323,16 +322,16 @@ public class ConcurrentPaymentTest {
         PaymentTransaction tx = transactions.get(0);
         assertEquals(PaymentStatus.SUCCESS, tx.getStatus(), "Persisted payment status must be SUCCESS");
         assertEquals(userCode, tx.getUserId(), "Persisted payment must belong to the correct test user");
-        assertEquals(0, paymentAmount.compareTo(tx.getAmount()), "Persisted payment amount must match requested charge amount");
+        assertEquals(paymentAmount, tx.getAmount(), "Persisted payment amount must match requested charge amount");
 
         // Verify user account balance was deducted exactly once
         User updatedUser = userRepository.findByUserCode(userCode)
                 .orElseThrow(() -> new AssertionError("User not found in DB: " + userCode));
-        BigDecimal expectedBalance = initialBalance.subtract(paymentAmount);
+        Long expectedBalance = initialBalance - paymentAmount;
         assertEquals(
-                0,
-                expectedBalance.stripTrailingZeros().compareTo(updatedUser.getBalance().stripTrailingZeros()),
-                String.format("User balance deduction mismatch! Expected %s but found %s", expectedBalance, updatedUser.getBalance())
+                expectedBalance,
+                updatedUser.getBalance(),
+                String.format("User balance deduction mismatch! Expected %d but found %d", expectedBalance, updatedUser.getBalance())
         );
 
         // Verify idempotency record state

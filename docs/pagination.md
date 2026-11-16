@@ -134,7 +134,7 @@ X-Api-Key: apexpay_admin_secret_key_2026
       "id": "PAY_98F1A2B3C4D5E6F7",
       "paymentId": "PAY_98F1A2B3C4D5E6F7",
       "userId": "USR_ALICE",
-      "amount": 250.0000,
+      "amount": 25000,
       "currency": "USD",
       "status": "SUCCESS",
       "paymentMethod": "CREDIT_CARD",

@@ -21,7 +21,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -68,13 +67,13 @@ class RefundProcessingServiceTest {
     void testProcessRefund_Success() {
         String paymentId = "PAY_1001";
         String userId = "USR_BOB";
-        BigDecimal paymentAmount = new BigDecimal("200.00");
-        BigDecimal refundAmount = new BigDecimal("100.00");
+        Long paymentAmount = 20000L;
+        Long refundAmount = 10000L;
 
         PaymentTransaction payment = new PaymentTransaction(paymentId, "IDEM_1001", userId, paymentAmount, "USD", "CREDIT_CARD", "Test payment");
         payment.setStatus(PaymentStatus.SUCCESS);
 
-        User user = new User(userId, "Bob", "bob@example.com", new BigDecimal("500.00"));
+        User user = new User(userId, "Bob", "bob@example.com", 50000L);
 
         ProcessRefundRequest request = new ProcessRefundRequest(paymentId, "IDEM_REF_1001", refundAmount, "Customer requested partial refund");
 
@@ -91,7 +90,7 @@ class RefundProcessingServiceTest {
         assertEquals(PaymentStatus.REFUNDED, response.getStatus());
 
         verify(refundRepository, times(1)).save(any(RefundTransaction.class));
-        verify(userRepository, times(1)).save(argThat(u -> u.getBalance().compareTo(new BigDecimal("600.00")) == 0));
+        verify(userRepository, times(1)).save(argThat(u -> u.getBalance() == 60000L));
         verify(idempotencyService, times(1)).markCompleted(eq("IDEM_REF_1001"), any(), eq(200));
     }
 
@@ -99,9 +98,9 @@ class RefundProcessingServiceTest {
     @DisplayName("Should throw InvalidTransactionStateException when refunding a FAILED payment")
     void testProcessRefund_FailedPayment_ThrowsException() {
         String paymentId = "PAY_FAILED_1002";
-        ProcessRefundRequest request = new ProcessRefundRequest(paymentId, "IDEM_REF_1002", new BigDecimal("50.00"), "Invalid refund");
+        ProcessRefundRequest request = new ProcessRefundRequest(paymentId, "IDEM_REF_1002", 5000L, "Invalid refund");
 
-        PaymentTransaction payment = new PaymentTransaction(paymentId, "IDEM_1002", "USR_BOB", new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Test");
+        PaymentTransaction payment = new PaymentTransaction(paymentId, "IDEM_1002", "USR_BOB", 10000L, "USD", "CREDIT_CARD", "Test");
         payment.setStatus(PaymentStatus.FAILED);
 
         when(idempotencyService.tryAcquireOrGet(eq("IDEM_REF_1002"), any())).thenReturn(Optional.empty());
@@ -114,14 +113,14 @@ class RefundProcessingServiceTest {
     @DisplayName("Should throw InvalidTransactionStateException when cumulative refund exceeds payment amount")
     void testProcessRefund_ExceedsOriginalAmount_ThrowsException() {
         String paymentId = "PAY_1003";
-        BigDecimal paymentAmount = new BigDecimal("100.00");
+        Long paymentAmount = 10000L;
 
         PaymentTransaction payment = new PaymentTransaction(paymentId, "IDEM_1003", "USR_BOB", paymentAmount, "USD", "CREDIT_CARD", "Test");
         payment.setStatus(PaymentStatus.SUCCESS);
 
-        RefundTransaction priorRefund = new RefundTransaction("REF_001", paymentId, "USR_BOB", new BigDecimal("80.00"), PaymentStatus.REFUNDED, "Prior partial refund");
+        RefundTransaction priorRefund = new RefundTransaction("REF_001", paymentId, "USR_BOB", 8000L, PaymentStatus.REFUNDED, "Prior partial refund");
 
-        ProcessRefundRequest request = new ProcessRefundRequest(paymentId, "IDEM_REF_1003", new BigDecimal("30.00"), "Second refund attempt");
+        ProcessRefundRequest request = new ProcessRefundRequest(paymentId, "IDEM_REF_1003", 3000L, "Second refund attempt");
 
         when(idempotencyService.tryAcquireOrGet(eq("IDEM_REF_1003"), any())).thenReturn(Optional.empty());
         when(paymentRepository.findByPaymentId(paymentId)).thenReturn(Optional.of(payment));
@@ -134,12 +133,12 @@ class RefundProcessingServiceTest {
     @DisplayName("Should return cached response on duplicate refund idempotency key")
     void testProcessRefund_DuplicateIdempotencyKey_ReturnsCachedResponse() throws Exception {
         String key = "IDEM_REF_CACHED";
-        ProcessRefundRequest request = new ProcessRefundRequest("PAY_1004", key, new BigDecimal("50.00"), "Duplicate");
+        ProcessRefundRequest request = new ProcessRefundRequest("PAY_1004", key, 5000L, "Duplicate");
 
         RefundResponse expectedResponse = new RefundResponse();
         expectedResponse.setRefundId("REF_CACHED_001");
         expectedResponse.setPaymentId("PAY_1004");
-        expectedResponse.setAmount(new BigDecimal("50.00"));
+        expectedResponse.setAmount(5000L);
         expectedResponse.setStatus(PaymentStatus.REFUNDED);
 
         IdempotencyKeyRecord cachedRecord = new IdempotencyKeyRecord(key, "hash");
@@ -160,12 +159,12 @@ class RefundProcessingServiceTest {
     void testProcessRefund_UsesPessimisticLock() {
         String paymentId = "PAY_PESS_99";
         String userId = "USR_ALICE";
-        BigDecimal paymentAmount = new BigDecimal("100.00");
-        BigDecimal refundAmount = new BigDecimal("40.00");
+        Long paymentAmount = 10000L;
+        Long refundAmount = 4000L;
 
         PaymentTransaction payment = new PaymentTransaction(paymentId, "IDEM_PESS_99", userId, paymentAmount, "USD", "CREDIT_CARD", "Pessimistic Test");
         payment.setStatus(PaymentStatus.SUCCESS);
-        User user = new User(userId, "Alice", "alice@example.com", new BigDecimal("200.00"));
+        User user = new User(userId, "Alice", "alice@example.com", 20000L);
 
         ProcessRefundRequest request = new ProcessRefundRequest(paymentId, "IDEM_REF_PESS_99", refundAmount, "Locking test");
 

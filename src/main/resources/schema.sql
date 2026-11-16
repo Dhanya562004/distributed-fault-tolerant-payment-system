@@ -3,13 +3,20 @@
 -- Target Dialect: PostgreSQL / H2 (PostgreSQL Mode)
 -- =============================================================================
 
+-- 0. Currencies Table (ISO 4217 Currency Codes & Minor Unit Decimal Places)
+CREATE TABLE IF NOT EXISTS currencies (
+    code VARCHAR(8) PRIMARY KEY,
+    decimal_places INT NOT NULL DEFAULT 2,
+    name VARCHAR(64) NOT NULL
+);
+
 -- 1. Users Table
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     user_code VARCHAR(64) NOT NULL UNIQUE,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
-    balance NUMERIC(19, 4) NOT NULL DEFAULT 0.0000,
+    balance BIGINT NOT NULL DEFAULT 0,
     version BIGINT DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -23,7 +30,7 @@ CREATE TABLE IF NOT EXISTS payments (
     payment_id VARCHAR(64) NOT NULL UNIQUE,
     idempotency_key VARCHAR(128) NOT NULL,
     user_id VARCHAR(64) NOT NULL,
-    amount NUMERIC(19, 4) NOT NULL,
+    amount BIGINT NOT NULL,
     currency VARCHAR(8) NOT NULL DEFAULT 'USD',
     status VARCHAR(32) NOT NULL,
     payment_method VARCHAR(64) NOT NULL,
@@ -63,7 +70,7 @@ CREATE TABLE IF NOT EXISTS refunds (
     refund_id VARCHAR(64) NOT NULL UNIQUE,
     payment_id VARCHAR(64) NOT NULL,
     user_id VARCHAR(64) NOT NULL,
-    amount NUMERIC(19, 4) NOT NULL,
+    amount BIGINT NOT NULL,
     status VARCHAR(32) NOT NULL,
     reason VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

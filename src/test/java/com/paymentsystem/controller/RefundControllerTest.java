@@ -18,7 +18,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -53,14 +52,14 @@ class RefundControllerTest {
     @DisplayName("POST /api/v1/refunds should return 201 CREATED for valid refund request")
     void testProcessRefund_Success() throws Exception {
         ProcessRefundRequest request = new ProcessRefundRequest(
-                "PAY_1001", "IDEM_REF_CTRL", new BigDecimal("50.00"), "Product return"
+                "PAY_1001", "IDEM_REF_CTRL", 5000L, "Product return"
         );
 
         RefundResponse response = new RefundResponse();
         response.setRefundId("REF_1001");
         response.setPaymentId("PAY_1001");
         response.setUserId("USR_ALICE");
-        response.setAmount(new BigDecimal("50.00"));
+        response.setAmount(5000L);
         response.setStatus(PaymentStatus.REFUNDED);
 
         when(refundProcessingService.processRefund(any(ProcessRefundRequest.class))).thenReturn(response);
@@ -78,7 +77,7 @@ class RefundControllerTest {
     @DisplayName("POST /api/v1/refunds should return 422 UNPROCESSABLE_ENTITY on InvalidTransactionStateException")
     void testProcessRefund_InvalidState_ReturnsUnprocessableEntity() throws Exception {
         ProcessRefundRequest request = new ProcessRefundRequest(
-                "PAY_1002", "IDEM_REF_INVALID", new BigDecimal("50.00"), "Cannot refund non-successful transaction"
+                "PAY_1002", "IDEM_REF_INVALID", 5000L, "Cannot refund non-successful transaction"
         );
 
         when(refundProcessingService.processRefund(any(ProcessRefundRequest.class)))
@@ -95,14 +94,14 @@ class RefundControllerTest {
     @DisplayName("POST /api/v1/refunds should include Idempotent-Replayed: true header when refund response is cached")
     void testProcessRefund_CachedReplay_ReturnsIdempotentReplayedHeader() throws Exception {
         ProcessRefundRequest request = new ProcessRefundRequest(
-                "PAY_1001", "IDEM_REF_REPLAY", new BigDecimal("50.00"), "Replay return"
+                "PAY_1001", "IDEM_REF_REPLAY", 5000L, "Replay return"
         );
 
         RefundResponse response = new RefundResponse();
         response.setRefundId("REF_1001");
         response.setPaymentId("PAY_1001");
         response.setUserId("USR_ALICE");
-        response.setAmount(new BigDecimal("50.00"));
+        response.setAmount(5000L);
         response.setStatus(PaymentStatus.REFUNDED);
         response.setIsCachedIdempotentResponse(true);
 
@@ -122,14 +121,14 @@ class RefundControllerTest {
     @DisplayName("POST /api/v1/refunds should NOT include Idempotent-Replayed header on original refund execution")
     void testProcessRefund_OriginalExecution_DoesNotReturnReplayHeader() throws Exception {
         ProcessRefundRequest request = new ProcessRefundRequest(
-                "PAY_1001", "IDEM_REF_ORIG", new BigDecimal("50.00"), "Original return"
+                "PAY_1001", "IDEM_REF_ORIG", 5000L, "Original return"
         );
 
         RefundResponse response = new RefundResponse();
         response.setRefundId("REF_1002");
         response.setPaymentId("PAY_1001");
         response.setUserId("USR_ALICE");
-        response.setAmount(new BigDecimal("50.00"));
+        response.setAmount(5000L);
         response.setStatus(PaymentStatus.REFUNDED);
         response.setIsCachedIdempotentResponse(false);
 

@@ -26,7 +26,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -77,14 +76,14 @@ public class TransactionalOutboxIntegrationTest {
         String idempotencyKey = "IDEM_OUTBOX_1_" + System.currentTimeMillis();
 
         // Create user
-        CreateUserRequest userReq = new CreateUserRequest(userCode, "Outbox User", userCode.toLowerCase() + "@test.com", new BigDecimal("1000.00"));
+        CreateUserRequest userReq = new CreateUserRequest(userCode, "Outbox User", userCode.toLowerCase() + "@test.com", 100000L);
         mockMvc.perform(post("/api/v1/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(userReq)))
                 .andExpect(status().isCreated());
 
         // Process payment
-        InitiatePaymentRequest payReq = new InitiatePaymentRequest(idempotencyKey, userCode, new BigDecimal("150.00"), "USD", "CREDIT_CARD", "Outbox Test Payment");
+        InitiatePaymentRequest payReq = new InitiatePaymentRequest(idempotencyKey, userCode, 15000L, "USD", "CREDIT_CARD", "Outbox Test Payment");
         MvcResult payResult = mockMvc.perform(post("/api/v1/payments")
                 .header("X-Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -116,14 +115,14 @@ public class TransactionalOutboxIntegrationTest {
         String idempotencyKey = "IDEM_OUTBOX_2_" + System.currentTimeMillis();
 
         // Create user
-        CreateUserRequest userReq = new CreateUserRequest(userCode, "Outbox User 2", userCode.toLowerCase() + "@test.com", new BigDecimal("1000.00"));
+        CreateUserRequest userReq = new CreateUserRequest(userCode, "Outbox User 2", userCode.toLowerCase() + "@test.com", 100000L);
         mockMvc.perform(post("/api/v1/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(userReq)))
                 .andExpect(status().isCreated());
 
         // Initial payment
-        InitiatePaymentRequest payReq = new InitiatePaymentRequest(idempotencyKey, userCode, new BigDecimal("200.00"), "USD", "CREDIT_CARD", "Initial payment");
+        InitiatePaymentRequest payReq = new InitiatePaymentRequest(idempotencyKey, userCode, 20000L, "USD", "CREDIT_CARD", "Initial payment");
         MvcResult payResult = mockMvc.perform(post("/api/v1/payments")
                 .header("X-Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -155,7 +154,7 @@ public class TransactionalOutboxIntegrationTest {
         String idempotencyKey = "IDEM_OUTBOX_3_" + System.currentTimeMillis();
 
         // Submit payment with invalid negative amount -> 400 Bad Request
-        InitiatePaymentRequest payReq = new InitiatePaymentRequest(idempotencyKey, userCode, new BigDecimal("-100.00"), "USD", "CREDIT_CARD", "Negative");
+        InitiatePaymentRequest payReq = new InitiatePaymentRequest(idempotencyKey, userCode, -10000L, "USD", "CREDIT_CARD", "Negative");
         mockMvc.perform(post("/api/v1/payments")
                 .header("X-Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -174,14 +173,14 @@ public class TransactionalOutboxIntegrationTest {
         String refIdemKey = "IDEM_REF_4_" + System.currentTimeMillis();
 
         // Create user
-        CreateUserRequest userReq = new CreateUserRequest(userCode, "Refund Customer", userCode.toLowerCase() + "@test.com", new BigDecimal("500.00"));
+        CreateUserRequest userReq = new CreateUserRequest(userCode, "Refund Customer", userCode.toLowerCase() + "@test.com", 50000L);
         mockMvc.perform(post("/api/v1/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(userReq)))
                 .andExpect(status().isCreated());
 
         // Payment
-        InitiatePaymentRequest payReq = new InitiatePaymentRequest(payIdemKey, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Payment to refund");
+        InitiatePaymentRequest payReq = new InitiatePaymentRequest(payIdemKey, userCode, 10000L, "USD", "CREDIT_CARD", "Payment to refund");
         MvcResult payResult = mockMvc.perform(post("/api/v1/payments")
                 .header("X-Idempotency-Key", payIdemKey)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -192,7 +191,7 @@ public class TransactionalOutboxIntegrationTest {
         PaymentResponse payment = objectMapper.readValue(payResult.getResponse().getContentAsString(), PaymentResponse.class);
 
         // Process refund
-        ProcessRefundRequest refundReq = new ProcessRefundRequest(payment.getPaymentId(), refIdemKey, new BigDecimal("50.00"), "Item returned");
+        ProcessRefundRequest refundReq = new ProcessRefundRequest(payment.getPaymentId(), refIdemKey, 5000L, "Item returned");
         MvcResult refundResult = mockMvc.perform(post("/api/v1/refunds")
                 .header("X-Idempotency-Key", refIdemKey)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -241,14 +240,14 @@ public class TransactionalOutboxIntegrationTest {
         String userCode = "USR_OUTBOX_6_" + System.currentTimeMillis();
         String idempotencyKey = "IDEM_OUTBOX_6_" + System.currentTimeMillis();
 
-        CreateUserRequest userReq = new CreateUserRequest(userCode, "Independent Payment", userCode.toLowerCase() + "@test.com", new BigDecimal("500.00"));
+        CreateUserRequest userReq = new CreateUserRequest(userCode, "Independent Payment", userCode.toLowerCase() + "@test.com", 50000L);
         mockMvc.perform(post("/api/v1/users")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(userReq)))
                 .andExpect(status().isCreated());
 
         // Payment processes successfully
-        InitiatePaymentRequest payReq = new InitiatePaymentRequest(idempotencyKey, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Payment");
+        InitiatePaymentRequest payReq = new InitiatePaymentRequest(idempotencyKey, userCode, 10000L, "USD", "CREDIT_CARD", "Payment");
         MvcResult payResult = mockMvc.perform(post("/api/v1/payments")
                 .header("X-Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
