@@ -25,6 +25,9 @@ public class UserController {
     private final UserRepository userRepository;
     private final com.paymentsystem.service.LedgerService ledgerService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.ledger.enabled:true}")
+    private boolean ledgerEnabled = true;
+
     @Autowired
     public UserController(UserRepository userRepository,
                           @Autowired(required = false) com.paymentsystem.service.LedgerService ledgerService) {
@@ -36,12 +39,16 @@ public class UserController {
         this(userRepository, null);
     }
 
+    public void setLedgerEnabled(boolean ledgerEnabled) {
+        this.ledgerEnabled = ledgerEnabled;
+    }
+
     @PostMapping
     @Operation(summary = "Create User Account", description = "Provisions a new user account with initial balance")
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
         User user = new User(request.getUserCode(), request.getName(), request.getEmail(), request.getInitialBalance());
         User saved = userRepository.save(user);
-        if (saved.getBalance() != null && saved.getBalance() > 0 && ledgerService != null) {
+        if (saved.getBalance() != null && saved.getBalance() > 0 && ledgerService != null && ledgerEnabled) {
             ledgerService.recordOpeningBalance(saved.getUserCode(), saved.getBalance(), "USD");
         }
         return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(saved));

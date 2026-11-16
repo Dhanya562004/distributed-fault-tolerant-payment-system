@@ -2,7 +2,7 @@
 
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-007396.svg?style=flat-square&logo=openjdk)](https://www.oracle.com/java/)
 [![Spring Boot 3.3.4](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F.svg?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
-[![Tests](https://img.shields.io/badge/Tests-190%20Passing%20(H2)-10B981.svg?style=flat-square)](docs/testing.md)
+[![Tests](https://img.shields.io/badge/Tests-191%20Passing%20(H2)-10B981.svg?style=flat-square)](docs/testing.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 [![AI Usage](https://img.shields.io/badge/AI%20Usage-Disclosure-8B5CF6.svg?style=flat-square)](AI_USAGE.md)
 
@@ -81,8 +81,8 @@ Provisions the backend (`8080`), PostgreSQL (`5432`), MongoDB (`27017`), and Str
 ```bash
 mvn clean test
 ```
-Runs the 190 unit and integration tests (double-entry ledger debit/credit matching, SQL reconciliation audits, append-only immutability, finite state machine transitions, cumulative refund limit checks, atomic payment commit, security filters, API key auth, scoped idempotency, request ID propagation, standardized errors, controllers, service logic, outbox workers, idempotency expiry, stuck-key recovery, queue partitioning, currency service, and pagination).
-- **Status**: 190 passed, 0 failures, 0 errors.
+Runs the 191 unit and integration tests (double-entry ledger debit/credit matching, SQL reconciliation audits, append-only immutability, finite state machine transitions, cumulative refund limit checks, atomic payment commit, security filters, API key auth, scoped idempotency, request ID propagation, standardized errors, controllers, service logic, outbox workers, idempotency expiry, stuck-key recovery, queue partitioning, currency service, and pagination).
+- **Status**: 191 passed, 0 failures, 0 errors.
 
 ### 2. PostgreSQL 16 Testcontainers Suite (Requires Docker)
 ```bash
@@ -113,6 +113,57 @@ Measured with JaCoCo (`mvn test jacoco:report`):
 
 ---
 
+## Safe Production Changes & Rollback Runbook
+
+### 1. Zero-Downtime Database Migrations (Flyway)
+The relational database schema is version-controlled and applied at startup via **Flyway** (`src/main/resources/db/migration/`):
+- `V1__initial_schema.sql`: Authoritative baseline DDL defining all 8 core tables (`currencies`, `api_keys`, `users`, `payments`, `idempotency_keys`, `refunds`, `outbox_events`, `ledger_entries`), primary keys, unique constraints, and high-performance b-tree indexes.
+- `V2__seed_initial_data.sql`: Idempotent baseline seed data configuring ISO-4217 currencies (`USD`, `EUR`, `GBP`, `INR`), test users (`USR_ALICE`, `USR_BOB`, `USR_CHARLIE`, `USR_DAVID`), and default admin API keys.
+- **Hibernate DDL Validation**: `spring.jpa.hibernate.ddl-auto=validate` is strictly enforced across dev, test, and production profiles. Hibernate validates entity mappings against Flyway-managed tables on application startup and refuses to boot on schema drift.
+
+### 2. Two-Step Expand & Contract Safe Changes
+All schema modifications follow the **Expand / Contract** pattern to allow zero-downtime rolling deployments without breaking active application instances.
+- **Detailed Runbook**: A complete, step-by-step production example detailing adding a `fee_amount` column, backward-compatible dual-writing code, chunked online batch backfills using `FOR UPDATE SKIP LOCKED`, and final constraint contraction is documented in [docs/safe-changes.md](docs/safe-changes.md).
+
+### 3. Ledger Feature Flag & Zero-Downtime Rollback
+The double-entry financial ledger and reconciliation audit engine are guarded by the operational feature flag:
+```yaml
+app:
+  ledger:
+    enabled: ${LEDGER_ENABLED:true}
+```
+- **Live Observability**: The current status of the feature flag and reconciliation engine is published live at `/api/v1/metrics`:
+  ```json
+  {
+    "ledgerEnabled": true,
+    "reconciliationStatus": "BALANCED",
+    "reconciliationMismatchCount": 0,
+    "lastReconciliationTime": "2026-11-16T12:00:00Z"
+  }
+  ```
+
+#### Immediate Rollback Procedure
+If a production incident, database performance bottleneck, or unforeseen ledger deadlock occurs:
+1. **Disable Ledger Engine via Environment Variable**:
+   Set `LEDGER_ENABLED=false` in the production environment (e.g., Kubernetes Deployment ConfigMap, AWS ECS Task Definition, or Render Environment Settings):
+   ```bash
+   export LEDGER_ENABLED=false
+   ```
+2. **Execute Rolling Application Restart**:
+   Restart worker nodes without dropping or altering database tables:
+   ```bash
+   kubectl rollout restart deployment/apexpay-backend
+   ```
+3. **Operational Impact During Rollback**:
+   - **Payment & Refund Processing**: Continue processing payments and issuing refunds without downtime. Account balances are safely deducted and credited under existing atomic transaction controls.
+   - **Ledger Entries**: Calls to `recordPaymentEntries()`, `recordRefundEntries()`, and `recordOpeningBalance()` become immediate no-ops. Zero writes are made to `ledger_entries`.
+   - **Reconciliation Engine**: Background reconciliation jobs skip audit queries and immediately report status `"DISABLED"`.
+   - **Zero Data Loss & Zero Schema Reversion**: Existing ledger rows remain preserved and intact. No `DROP TABLE` or `ALTER TABLE` is required.
+4. **Post-Incident Recovery**:
+   Once root cause is remediated, set `LEDGER_ENABLED=true`, restart instances, and execute the startup backfill runner to re-establish matching ledger entries for transactions processed during the maintenance window.
+
+---
+
 ## Known Limits
 
 - **Demo Persistence**: The public Render deployment uses an in-memory H2 database (`MODE=PostgreSQL`). Data does not persist across service restarts or free-tier sleep cycles. A PostgreSQL configuration is provided in `application-prod.yml`.
@@ -130,6 +181,7 @@ Measured with JaCoCo (`mvn test jacoco:report`):
 - [API Guide](docs/api-guide.md) — Endpoint specifications, request/response schemas, and example payloads.
 - [Test Strategy](docs/testing.md) — Test pyramid, locking verification, and benchmark methodology.
 - [Architectural Decision Records (ADRs)](docs/design-decisions.md) — Rationale for cryptographic hashing, failure taxonomy, and persistence choices.
+- [Safe Production Changes Runbook](docs/safe-changes.md) — Two-step zero-downtime database changes, Flyway migrations, feature flags, and rollback runbooks.
 - [AI Usage Disclosure](AI_USAGE.md) — Full disclosure of AI assistance, human governance, and testing realities.
 
 ---

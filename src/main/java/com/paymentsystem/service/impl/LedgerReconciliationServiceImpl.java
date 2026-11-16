@@ -35,6 +35,17 @@ public class LedgerReconciliationServiceImpl implements LedgerReconciliationServ
     private final AtomicReference<Instant> lastRunTime = new AtomicReference<>(null);
     private final AtomicReference<String> reconciliationStatus = new AtomicReference<>("INITIALIZING");
 
+    @org.springframework.beans.factory.annotation.Value("${app.ledger.enabled:true}")
+    private boolean ledgerEnabled = true;
+
+    public void setLedgerEnabled(boolean ledgerEnabled) {
+        this.ledgerEnabled = ledgerEnabled;
+    }
+
+    public boolean isLedgerEnabled() {
+        return ledgerEnabled;
+    }
+
     @Autowired
     public LedgerReconciliationServiceImpl(JdbcTemplate jdbcTemplate,
                                            @Autowired(required = false) LedgerOpeningBalanceBackfillRunner backfillRunner) {
@@ -59,6 +70,12 @@ public class LedgerReconciliationServiceImpl implements LedgerReconciliationServ
     @Transactional(readOnly = true)
     public ReconciliationResult runReconciliation(Duration cutoffDuration) {
         Instant now = Instant.now(clock);
+        if (!ledgerEnabled) {
+            logger.info("[LEDGER RECONCILIATION] Ledger engine is disabled via feature flag app.ledger.enabled=false. Reconciliation skipped.");
+            this.reconciliationStatus.set("DISABLED");
+            return new ReconciliationResult(now, true, 0, List.of(), List.of());
+        }
+
         Instant cutoff = (cutoffDuration != null && !cutoffDuration.isZero() && !cutoffDuration.isNegative())
                 ? now.minus(cutoffDuration)
                 : now;
@@ -144,6 +161,9 @@ public class LedgerReconciliationServiceImpl implements LedgerReconciliationServ
 
     @Scheduled(fixedDelayString = "${ledger.reconciliation.interval-ms:60000}", initialDelay = 10000)
     public void scheduledReconciliation() {
+        if (!ledgerEnabled) {
+            return;
+        }
         try {
             runReconciliation();
         } catch (Exception e) {
@@ -163,6 +183,9 @@ public class LedgerReconciliationServiceImpl implements LedgerReconciliationServ
 
     @Override
     public String getReconciliationStatus() {
+        if (!ledgerEnabled) {
+            return "DISABLED";
+        }
         return reconciliationStatus.get();
     }
 }

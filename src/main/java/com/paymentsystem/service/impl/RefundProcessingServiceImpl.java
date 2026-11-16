@@ -45,6 +45,17 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
     private final PaymentTransactionCoordinator paymentCoordinator;
     private final LedgerService ledgerService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.ledger.enabled:true}")
+    private boolean ledgerEnabled = true;
+
+    public void setLedgerEnabled(boolean ledgerEnabled) {
+        this.ledgerEnabled = ledgerEnabled;
+    }
+
+    public boolean isLedgerEnabled() {
+        return ledgerEnabled;
+    }
+
     public RefundProcessingServiceImpl(RefundTransactionRepository refundRepository,
                                        PaymentTransactionRepository paymentRepository,
                                        UserRepository userRepository,
@@ -142,7 +153,7 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
         });
 
         // Record double-entry ledger entries in the SAME database transaction as the refund
-        if (ledgerService != null) {
+        if (ledgerService != null && ledgerEnabled) {
             ledgerService.recordRefundEntries(
                     refundId,
                     payment.getUserId(),

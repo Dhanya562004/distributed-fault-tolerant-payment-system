@@ -577,42 +577,50 @@ public class IdempotencyExpiryAndReplayTest {
         user.setBalance(90000L);
         userRepository.saveAndFlush(user);
 
-        // Persist payment transaction
-        String paymentId = "PAY_RECOVERED_" + System.nanoTime();
-        PaymentTransaction tx = new PaymentTransaction(
-                paymentId, key, userCode, 10000L, "USD", "CREDIT_CARD", "Recovered test payment"
-        );
-        com.paymentsystem.test.PaymentTestHelper.walkToState(tx, PaymentStatus.SUCCESS);
-        paymentTransactionRepository.saveAndFlush(tx);
+        try {
+            // Persist payment transaction
+            String paymentId = "PAY_RECOVERED_" + System.nanoTime();
+            PaymentTransaction tx = new PaymentTransaction(
+                    paymentId, key, userCode, 10000L, "USD", "CREDIT_CARD", "Recovered test payment"
+            );
+            com.paymentsystem.test.PaymentTestHelper.walkToState(tx, PaymentStatus.SUCCESS);
+            paymentTransactionRepository.saveAndFlush(tx);
 
-        InitiatePaymentRequest req = new InitiatePaymentRequest(
-                key, userCode, 10000L, "USD", "CREDIT_CARD", "Recovered test payment"
-        );
-        String requestHash = idempotencyService.computePayloadHash(req);
+            InitiatePaymentRequest req = new InitiatePaymentRequest(
+                    key, userCode, 10000L, "USD", "CREDIT_CARD", "Recovered test payment"
+            );
+            String requestHash = idempotencyService.computePayloadHash(req);
 
-        // Stuck IN_PROGRESS key
-        IdempotencyKeyRecord record = new IdempotencyKeyRecord(key, requestHash, pastTime, pastTime.plus(Duration.ofHours(24)));
-        record.setStatus(IdempotencyKeyRecord.Status.IN_PROGRESS);
-        idempotencyKeyRepository.saveAndFlush(record);
+            // Stuck IN_PROGRESS key
+            IdempotencyKeyRecord record = new IdempotencyKeyRecord(key, requestHash, pastTime, pastTime.plus(Duration.ofHours(24)));
+            record.setStatus(IdempotencyKeyRecord.Status.IN_PROGRESS);
+            idempotencyKeyRepository.saveAndFlush(record);
 
-        // Run recovery job
-        int recovered = idempotencyService.recoverStuckKeys(clock.instant(), Duration.ofSeconds(120));
-        assertEquals(1, recovered, "Must recover 1 stuck key");
+            // Run recovery job
+            int recovered = idempotencyService.recoverStuckKeys(clock.instant(), Duration.ofSeconds(120));
+            assertEquals(1, recovered, "Must recover 1 stuck key");
 
-        IdempotencyKeyRecord updated = idempotencyKeyRepository.findByKeyValue(key).orElseThrow();
-        assertEquals(IdempotencyKeyRecord.Status.COMPLETED, updated.getStatus());
-        assertEquals(200, updated.getHttpStatusCode());
-        assertNotNull(updated.getResponseBody());
-        assertTrue(updated.getResponseBody().contains(paymentId));
+            IdempotencyKeyRecord updated = idempotencyKeyRepository.findByKeyValue(key).orElseThrow();
+            assertEquals(IdempotencyKeyRecord.Status.COMPLETED, updated.getStatus());
+            assertEquals(200, updated.getHttpStatusCode());
+            assertNotNull(updated.getResponseBody());
+            assertTrue(updated.getResponseBody().contains(paymentId));
 
-        // Resubmitting payment request must return cached response without double balance deduction
-        PaymentResponse response = paymentProcessingService.initiatePayment(req);
-        assertNotNull(response);
-        assertEquals(paymentId, response.getPaymentId());
-        assertEquals(PaymentStatus.SUCCESS, response.getStatus());
+            // Resubmitting payment request must return cached response without double balance deduction
+            PaymentResponse response = paymentProcessingService.initiatePayment(req);
+            assertNotNull(response);
+            assertEquals(paymentId, response.getPaymentId());
+            assertEquals(PaymentStatus.SUCCESS, response.getStatus());
 
-        User userAfter = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(90000L, userAfter.getBalance(), "Balance must NOT be charged again");
+            User userAfter = userRepository.findByUserCode(userCode).orElseThrow();
+            assertEquals(90000L, userAfter.getBalance(), "Balance must NOT be charged again");
+        } finally {
+            // Restore balance so subsequent shared in-memory ledger reconciliation tests remain balanced
+            userRepository.findByUserCode(userCode).ifPresent(u -> {
+                u.setBalance(100000L);
+                userRepository.saveAndFlush(u);
+            });
+        }
     }
 
     @Test

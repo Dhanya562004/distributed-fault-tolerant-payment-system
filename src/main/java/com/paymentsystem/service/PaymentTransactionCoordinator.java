@@ -54,6 +54,9 @@ public class PaymentTransactionCoordinator {
     @Value("${app.webhook.max-attempts:5}")
     private int defaultMaxAttempts = 5;
 
+    @Value("${app.ledger.enabled:true}")
+    private boolean ledgerEnabled = true;
+
     @Autowired
     public PaymentTransactionCoordinator(
             PaymentTransactionRepository paymentRepository,
@@ -99,6 +102,14 @@ public class PaymentTransactionCoordinator {
 
     public void setDefaultMaxAttempts(int defaultMaxAttempts) {
         this.defaultMaxAttempts = defaultMaxAttempts;
+    }
+
+    public void setLedgerEnabled(boolean ledgerEnabled) {
+        this.ledgerEnabled = ledgerEnabled;
+    }
+
+    public boolean isLedgerEnabled() {
+        return ledgerEnabled;
     }
 
     /**
@@ -158,6 +169,9 @@ public class PaymentTransactionCoordinator {
                     .or(() -> userRepository.findByUserCode(request.getUserId()));
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
+                if (ledgerService != null && ledgerEnabled) {
+                    ledgerService.recordOpeningBalance(user.getUserCode(), user.getBalance(), request.getCurrency());
+                }
                 if (user.getBalance() < request.getAmount()) {
                     throw new InsufficientBalanceException("Insufficient user account balance. Available: " + user.getBalance() + ", Requested: " + request.getAmount());
                 }
@@ -166,13 +180,13 @@ public class PaymentTransactionCoordinator {
             } else {
                 User newUser = new User(request.getUserId(), "Customer " + request.getUserId(), request.getUserId() + "@example.com", 1000000L - request.getAmount());
                 userRepository.save(newUser);
-                if (ledgerService != null) {
+                if (ledgerService != null && ledgerEnabled) {
                     ledgerService.recordOpeningBalance(request.getUserId(), 1000000L, request.getCurrency());
                 }
             }
 
             // Record double-entry ledger entries in the SAME database transaction as the balance change
-            if (ledgerService != null) {
+            if (ledgerService != null && ledgerEnabled) {
                 ledgerService.recordPaymentEntries(
                         paymentId,
                         request.getUserId(),

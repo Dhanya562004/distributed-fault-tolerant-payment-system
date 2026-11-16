@@ -33,6 +33,9 @@ public class MetricsServiceImpl implements MetricsService {
     @Autowired(required = false)
     private com.paymentsystem.service.LedgerReconciliationService ledgerReconciliationService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.ledger.enabled:true}")
+    private boolean ledgerEnabled = true;
+
     @Override
     public void incrementTotalTransactions() {
         totalTransactions.incrementAndGet();
@@ -126,6 +129,7 @@ public class MetricsServiceImpl implements MetricsService {
             response.setLastReconciliationTime(ledgerReconciliationService.getLastRunTime());
             response.setReconciliationStatus(ledgerReconciliationService.getReconciliationStatus());
         }
+        response.setLedgerEnabled(ledgerEnabled);
 
         return response;
     }

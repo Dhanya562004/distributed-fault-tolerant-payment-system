@@ -25,16 +25,31 @@ public class LedgerOpeningBalanceBackfillRunner implements ApplicationRunner {
 
     private final JdbcTemplate jdbcTemplate;
 
+    @org.springframework.beans.factory.annotation.Value("${app.ledger.enabled:true}")
+    private boolean ledgerEnabled = true;
+
     public LedgerOpeningBalanceBackfillRunner(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    public void setLedgerEnabled(boolean ledgerEnabled) {
+        this.ledgerEnabled = ledgerEnabled;
+    }
+
     @Override
     public void run(ApplicationArguments args) {
+        if (!ledgerEnabled) {
+            logger.info("[LEDGER BACKFILL] Ledger engine is disabled via feature flag app.ledger.enabled=false. Skipping backfill.");
+            return;
+        }
         backfillOpeningBalances();
     }
 
     public int backfillOpeningBalances() {
+        if (!ledgerEnabled) {
+            logger.info("[LEDGER BACKFILL] Ledger engine is disabled via feature flag app.ledger.enabled=false. Skipping backfill.");
+            return 0;
+        }
         try {
             // 1. Backfill CREDIT rows for user deposit balances
             String creditSql = """

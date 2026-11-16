@@ -18,6 +18,7 @@ public class SystemMetricsResponse {
     private long ledgerMismatchCount;
     private Instant lastReconciliationTime;
     private String reconciliationStatus;
+    private boolean ledgerEnabled = true;
     private Instant timestamp;
 
     public SystemMetricsResponse() {
@@ -126,6 +127,14 @@ public class SystemMetricsResponse {
 
     public void setReconciliationStatus(String reconciliationStatus) {
         this.reconciliationStatus = reconciliationStatus;
+    }
+
+    public boolean isLedgerEnabled() {
+        return ledgerEnabled;
+    }
+
+    public void setLedgerEnabled(boolean ledgerEnabled) {
+        this.ledgerEnabled = ledgerEnabled;
     }
 
     public Instant getTimestamp() {

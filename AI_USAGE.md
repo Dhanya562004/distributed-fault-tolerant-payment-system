@@ -90,9 +90,9 @@ The repository test suite consists of **232 total automated tests** across 35 te
 
 | Test Execution Stage | Environment | Test Count | Status | Verified Evidence |
 | :--- | :--- | :---: | :---: | :--- |
-| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 190 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` (190 tests passed in 01:14 min). |
+| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 191 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` (191 tests passed in 01:23 min). |
 | **Stage B: Concurrency & Real Database** | PostgreSQL 16 Testcontainers (Docker) | 42 | **Configured** (Docker-dependent) | 42 tests across 8 classes (including double-entry ledger verification in `PostgreSqlLedgerIntegrationTest`, `PostgreSqlRefundConcurrencyTest`, `PostgreSqlIdempotencyTest`, and `PostgreSqlAtomicPaymentCommitIntegrationTest`). Requires running Docker daemon (`mvn test -Ppostgres-it`). |
-| **Total Automated Suite** | Combined | **232** | **190 Passing locally (Docker-free), 42 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
+| **Total Automated Suite** | Combined | **233** | **191 Passing locally (Docker-free), 42 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
 
 ### Concurrency Stress Benchmark
 - **Test Implementation:** `ConcurrentPaymentTest` (H2) and `PostgreSqlConcurrencyStressTest` (PostgreSQL 16).
@@ -220,6 +220,15 @@ Transparency regarding AI-assisted development requires acknowledging key techni
 3. **Shared Database State Contamination in Fast Integration Test**:
    - *Mistake*: `testDuplicateRetry_UniqueConstraintPreventsDuplicateLedgerRows` and `testAppendOnly_UpdateAndDeleteProhibited` inserted isolated `DEBIT` entries directly against `USR_ALICE` without an offsetting `CREDIT`. Because Spring integration tests share the persistence context across methods, subsequent tests ran into intentional reconciliation failures (`[RECONCILIATION MISMATCH] Currency USD imbalance detected! Diff: 6000`).
    - *Correction*: Used balanced test transactions and cleaned up direct test fixture inserts inside `finally` blocks, restoring clean state for subsequent tests. All 190 tests pass with 0 errors.
+
+### Phase 5 AI Mistakes and Corrections Log
+1. **H2 Dialect Parser Rejection of PostgreSQL `ON CONFLICT` Syntax in Flyway `V2` Seed Migration**:
+   - *Mistake*: In `V2__seed_initial_data.sql`, initial seed statements used PostgreSQL dialect syntax `ON CONFLICT (col) DO NOTHING`. In local test runs using embedded H2 in PostgreSQL compatibility mode, the H2 SQL parser failed with `JdbcSQLSyntaxErrorException: Syntax error in SQL statement ... ON CONFLICT (code) DO NOTHING [42000-224]`.
+   - *Correction*: Replaced `ON CONFLICT DO NOTHING` with clean ANSI SQL `INSERT INTO ... VALUES (...)`. Because Flyway tracks applied scripts in `flyway_schema_history` and guarantees strict once-per-database execution, standard ANSI SQL inserts are completely safe and execute identically across H2 and PostgreSQL 16.
+2. **Cross-Test Database Pollution & Ledger Discrepancies from In-Memory State**:
+   - *Mistake*: In `LedgerFeatureFlagIntegrationTest`, testing payment processing with `app.ledger.enabled=false` deducted test user balances without writing ledger entries, leaving an unbacked balance deduction in the shared in-memory H2 database. Furthermore, older tests (`AtomicPaymentCommitIntegrationTest`, `ConcurrentPaymentTest`, `RefundConcurrencyIntegrationTest`) dynamically instantiated users via `userRepository.save()` rather than `UserController.createUser()`, resulting in missing opening-balance records when later payments were processed.
+   - *Impact*: In the full test suite run, `LedgerDoubleEntryIntegrationTest` reported reconciliation mismatches (`Table Balance <> Ledger Sum`).
+   - *Correction*: Added idempotent opening balance recording in `PaymentTransactionCoordinator` to ensure any dynamically created user receives a balanced opening-balance record before its first payment balance deduction, added cleanup `finally` blocks to restore test user balances in `LedgerFeatureFlagIntegrationTest` and `IdempotencyExpiryAndReplayTest`, and ensured `user` entity reloads avoid optimistic lock exceptions. All 191 tests pass with 0 errors.
 
 ---
 

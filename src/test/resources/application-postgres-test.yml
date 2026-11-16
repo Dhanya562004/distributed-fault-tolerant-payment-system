@@ -5,10 +5,14 @@ spring:
       - org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration
       - org.springframework.boot.autoconfigure.data.mongo.MongoRepositoriesAutoConfiguration
 
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
   sql:
     init:
-      mode: always
-      schema-locations: classpath:schema.sql
+      mode: never
 
   datasource:
     driver-class-name: org.postgresql.Driver
@@ -22,7 +26,7 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     defer-datasource-initialization: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
 
 management:
@@ -37,6 +41,8 @@ logging:
     org.testcontainers: INFO
 
 app:
+  ledger:
+    enabled: true
   idempotency:
     retention-hours: 24
   webhook:
