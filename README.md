@@ -91,11 +91,14 @@ mvn test -Ppostgres-it
 Runs 38 database-level concurrency tests against a real PostgreSQL 16 container, verifying row-level locking (`SELECT FOR UPDATE`), optimistic locking (`@Version`), MVCC transaction isolation, outbox event claiming, and stuck-key recovery.
 - **Status**: Passes in environments where Docker is running (e.g. GitHub Actions CI). In environments without Docker running, this command fails during container startup.
 
-### 3. In-Process Concurrency Benchmark
+### 3. In-Process Concurrency Benchmark (In-Process Only / In-Memory H2)
+> [!NOTE]
+> **In-Process Only**: This benchmark executes directly at the Java service layer inside the JVM against an in-memory H2 database using a `CountDownLatch` barrier. It validates thread-level synchronization and zero double-spending under concurrent load, but does not incur network round-trips or HTTP server serialization.
+
 ```bash
 mvn test -Dtest=ConcurrentPaymentTest
 ```
-Spawns 50 threads firing 1,000 duplicate requests with the same idempotency key and payload against the payment service to verify single execution and zero double-spending.
+Spawns 50 worker threads firing 1,000 duplicate requests with the same idempotency key and payload against the internal payment service to verify single execution and zero double-spending.
 
 Results observed from running `mvn test -Dtest=ConcurrentPaymentTest` (service-level, in-process H2):
 | Run | Requests | Workers | Throughput | Total Time | Avg Latency | p50 | p95 | p99 | Original Charges | Cached / 409 Conflicts | Failures |
@@ -106,7 +109,58 @@ Results observed from running `mvn test -Dtest=ConcurrentPaymentTest` (service-l
 
 In each run, the user's balance was deducted exactly once (from $1,000.00 to $900.00), exactly one transaction record was persisted, and all 999 concurrent duplicate requests were either served from cache or rejected with 409 Conflict.
 
-### 4. Test Coverage
+### 4. Real HTTP Load Test (k6 over Real HTTP against PostgreSQL)
+Tests full end-to-end performance over real HTTP (Apache Tomcat) against a real **PostgreSQL 16** database (with Flyway schema migrations, pessimistic row-locking, outbox event generation, and double-entry ledger persistence enabled).
+
+#### Benchmark Profile
+- **Traffic Composition**: 1,000 requests per run consisting of mostly **different payments** (~95%) and deliberate **duplicate replays** (~5%) with identical payload hashes to verify live cryptographic idempotency caching under concurrent load.
+- **Concurrency**: 20 concurrent Virtual Users (VUs) executing across a shared-iteration model.
+- **Endpoint**: `POST http://localhost:8080/api/v1/payments` with `X-Api-Key` authentication and `X-Idempotency-Key` headers.
+
+#### Machine & Environment Details
+| Component | Specification |
+| :--- | :--- |
+| **Processor (CPU)** | 11th Gen Intel(R) Core(TM) i3-1115G4 @ 3.00GHz (2 Cores, 4 Logical Processors) |
+| **Physical Memory (RAM)** | 8.0 GB (8,048,032 KB visible) |
+| **Operating System** | Microsoft Windows 11 Home Single Language (64-bit, Build 26100) |
+| **Java Runtime** | Java 17 (OpenJDK 17.0.9, Eclipse Temurin / Oracle HotSpot 64-Bit) |
+| **Database Engine** | PostgreSQL 16.8 (Alpine Linux Container, port 5433) |
+| **Database Connection Pool** | HikariCP (`maximum-pool-size: 20`, `minimum-idle: 5`) |
+| **Load Test Tool** | Grafana k6 v2.4.0 |
+
+#### Exact Commands to Run
+
+```bash
+# 1. Start PostgreSQL 16 Container (if not already running)
+docker run -d --name apexpay-pg -p 5433:5432 \
+  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=payment_db \
+  postgres:16-alpine
+
+# 2. Package and Run Spring Boot against PostgreSQL
+mvn package -DskipTests
+java -Dspring.profiles.active=prod \
+     -Dspring.datasource.url=jdbc:postgresql://localhost:5433/payment_db \
+     -Dspring.datasource.username=postgres \
+     -Dspring.datasource.password=postgres \
+     -jar target/distributed-fault-tolerant-payment-system-1.0.0.jar
+
+# 3. Execute k6 Load Test (Docker or local k6 binary)
+docker run --rm -v "${PWD}/scripts:/scripts" grafana/k6 run \
+  -e BASE_URL="http://host.docker.internal:8080" \
+  /scripts/k6-load-test.js
+```
+
+#### Results Observed Across 3 Consecutive Runs
+| Run | Requests | VUs | Unique Payments | Duplicate Replays (~5%) | Throughput (req/s) | Total Time | p50 (med) | p95 | p99 | Min | Max | Error Rate |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **#1** | 1,000 | 20 | 954 | 46 (4.6%) | **27.26 req/s** | 36.7s | **590.15 ms** | **1,690.00 ms** | **2,200.00 ms** | 13.20 ms | 2,990.00 ms | **0.00%** (0 / 1,000) |
+| **#2** | 1,000 | 20 | 953 | 47 (4.7%) | **36.01 req/s** | 27.8s | **477.26 ms** | **1,160.00 ms** | **1,540.00 ms** | 9.68 ms | 2,180.00 ms | **0.00%** (0 / 1,000) |
+| **#3** | 1,000 | 20 | 959 | 41 (4.1%) | **26.46 req/s** | 37.8s | **542.34 ms** | **2,110.00 ms** | **3,140.00 ms** | 11.68 ms | 4,210.00 ms | **0.00%** (0 / 1,000) |
+| **Avg** | 1,000 | 20 | 955.3 | 44.7 (4.5%) | **29.91 req/s** | 34.1s | **536.58 ms** | **1,653.33 ms** | **2,293.33 ms** | 11.52 ms | 3,126.67 ms | **0.00%** |
+
+- **Correctness Guarantees**: Across all 3,000 requests, 100% of responses returned HTTP 201 (`SUCCESS`), 100% of duplicate replays were served idempotently from cache with `Idempotent-Replayed: true` without double balance deductions, and post-test SQL reconciliation confirmed zero double-entry ledger mismatches (`reconciliationStatus: "BALANCED"`, `ledgerMismatchCount: 0`).
+
+### 5. Test Coverage
 Measured with JaCoCo (`mvn test jacoco:report`):
 - **Line Coverage**: 69.1% (1,759 / 2,546 lines covered)
 - **Branch Coverage**: 61.5% (380 / 618 branches covered)

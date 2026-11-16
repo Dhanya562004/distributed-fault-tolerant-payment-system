@@ -94,11 +94,23 @@ The repository test suite consists of **232 total automated tests** across 35 te
 | **Stage B: Concurrency & Real Database** | PostgreSQL 16 Testcontainers (Docker) | 42 | **Configured** (Docker-dependent) | 42 tests across 8 classes (including double-entry ledger verification in `PostgreSqlLedgerIntegrationTest`, `PostgreSqlRefundConcurrencyTest`, `PostgreSqlIdempotencyTest`, and `PostgreSqlAtomicPaymentCommitIntegrationTest`). Requires running Docker daemon (`mvn test -Ppostgres-it`). |
 | **Total Automated Suite** | Combined | **233** | **191 Passing locally (Docker-free), 42 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
 
-### Concurrency Stress Benchmark
+### Concurrency Stress Benchmark (In-Process Only)
 - **Test Implementation:** `ConcurrentPaymentTest` (H2) and `PostgreSqlConcurrencyStressTest` (PostgreSQL 16).
 - **Execution Profile:** 1,000 duplicate payment requests submitted concurrently using 50 worker threads coordinated by a `CountDownLatch` barrier.
 - **Verified Assertions:** Exactly 1 transaction succeeded with balance deduction; 999 duplicate requests were rejected or served from cache; zero double-spending occurred.
 - **Scope Limitation:** This benchmark executes in-process service-level calls and does not measure external network latency, HTTP serialization overhead, or distributed multi-node coordination.
+
+### Real HTTP Load Test (k6 against PostgreSQL)
+- **Test Implementation:** `scripts/k6-load-test.js` executed via Grafana k6 over real HTTP.
+- **Execution Profile:** 1,000 requests per run, 20 concurrent Virtual Users (VUs) against live Spring Boot Tomcat and PostgreSQL 16 ACID storage (port 5433).
+- **Traffic Composition:** Mostly different payment requests (~95%) with deliberate duplicate replays (~5%) re-submitting identical payload hashes.
+- **Verified Results (3-Run Average):**
+  - **Throughput:** 29.91 req/s
+  - **p50 Latency:** 536.58 ms
+  - **p95 Latency:** 1,653.33 ms
+  - **p99 Latency:** 2,293.33 ms
+  - **Error Rate:** 0.00% (3,000 / 3,000 checks passed; 100% of duplicates replayed with `Idempotent-Replayed: true` without double balance deductions).
+  - **Reconciliation Audit:** Verified zero ledger mismatches (`reconciliationStatus: "BALANCED"`, `ledgerMismatchCount: 0`).
 
 ### Automated Testing Disclaimer
 Passing automated tests validates that the system satisfies its defined unit, integration, and concurrency assertions under synthetic test conditions. Automated test execution does **not** constitute formal production certification, does **not** prove the absence of undiscovered edge cases or vulnerabilities, and does **not** simulate live inter-bank clearing conditions.
@@ -229,6 +241,11 @@ Transparency regarding AI-assisted development requires acknowledging key techni
    - *Mistake*: In `LedgerFeatureFlagIntegrationTest`, testing payment processing with `app.ledger.enabled=false` deducted test user balances without writing ledger entries, leaving an unbacked balance deduction in the shared in-memory H2 database. Furthermore, older tests (`AtomicPaymentCommitIntegrationTest`, `ConcurrentPaymentTest`, `RefundConcurrencyIntegrationTest`) dynamically instantiated users via `userRepository.save()` rather than `UserController.createUser()`, resulting in missing opening-balance records when later payments were processed.
    - *Impact*: In the full test suite run, `LedgerDoubleEntryIntegrationTest` reported reconciliation mismatches (`Table Balance <> Ledger Sum`).
    - *Correction*: Added idempotent opening balance recording in `PaymentTransactionCoordinator` to ensure any dynamically created user receives a balanced opening-balance record before its first payment balance deduction, added cleanup `finally` blocks to restore test user balances in `LedgerFeatureFlagIntegrationTest` and `IdempotencyExpiryAndReplayTest`, and ensured `user` entity reloads avoid optimistic lock exceptions. All 191 tests pass with 0 errors.
+
+### Phase 6 AI Mistakes and Corrections Log
+1. **Payload Hash Mismatch on Duplicate Replay in k6 Load Test**:
+   - *Mistake*: In `scripts/k6-load-test.js`, duplicate replay logic dynamically altered the `description` JSON field (`k6 load test duplicate replay` vs `k6 load test payment`). The cryptographic idempotency guard calculated the SHA-256 hash of the incoming request body and detected a mismatch against the cached record, correctly rejecting the requests with HTTP 409 `PAYLOAD_MISMATCH`.
+   - *Correction*: Stored the exact serialized JSON payload string alongside the idempotency key in the per-VU replay buffer so duplicate submissions transmit an identical payload hash. Subsequent runs verified 100% of duplicate replays succeeded with HTTP 201 `SUCCESS` and `Idempotent-Replayed: true`.
 
 ---
 
