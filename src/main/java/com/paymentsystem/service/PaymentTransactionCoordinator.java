@@ -47,6 +47,7 @@ public class PaymentTransactionCoordinator {
     private final OutboxEventRepository outboxEventRepository;
     private final UserRepository userRepository;
     private final GatewaySimulationService gatewaySimulationService;
+    private final LedgerService ledgerService;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
@@ -59,12 +60,14 @@ public class PaymentTransactionCoordinator {
             OutboxEventRepository outboxEventRepository,
             @Autowired(required = false) UserRepository userRepository,
             @Autowired(required = false) GatewaySimulationService gatewaySimulationService,
+            @Autowired(required = false) LedgerService ledgerService,
             ObjectMapper objectMapper,
             @Autowired(required = false) Clock clock) {
         this.paymentRepository = paymentRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.userRepository = userRepository;
         this.gatewaySimulationService = gatewaySimulationService;
+        this.ledgerService = ledgerService;
         this.objectMapper = objectMapper;
         this.clock = clock != null ? clock : Clock.systemUTC();
     }
@@ -72,16 +75,26 @@ public class PaymentTransactionCoordinator {
     public PaymentTransactionCoordinator(
             PaymentTransactionRepository paymentRepository,
             OutboxEventRepository outboxEventRepository,
+            UserRepository userRepository,
+            GatewaySimulationService gatewaySimulationService,
             ObjectMapper objectMapper,
             Clock clock) {
-        this(paymentRepository, outboxEventRepository, null, null, objectMapper, clock);
+        this(paymentRepository, outboxEventRepository, userRepository, gatewaySimulationService, null, objectMapper, clock);
+    }
+
+    public PaymentTransactionCoordinator(
+            PaymentTransactionRepository paymentRepository,
+            OutboxEventRepository outboxEventRepository,
+            ObjectMapper objectMapper,
+            Clock clock) {
+        this(paymentRepository, outboxEventRepository, null, null, null, objectMapper, clock);
     }
 
     public PaymentTransactionCoordinator(
             PaymentTransactionRepository paymentRepository,
             OutboxEventRepository outboxEventRepository,
             ObjectMapper objectMapper) {
-        this(paymentRepository, outboxEventRepository, null, null, objectMapper, Clock.systemUTC());
+        this(paymentRepository, outboxEventRepository, null, null, null, objectMapper, Clock.systemUTC());
     }
 
     public void setDefaultMaxAttempts(int defaultMaxAttempts) {
@@ -153,6 +166,20 @@ public class PaymentTransactionCoordinator {
             } else {
                 User newUser = new User(request.getUserId(), "Customer " + request.getUserId(), request.getUserId() + "@example.com", 1000000L - request.getAmount());
                 userRepository.save(newUser);
+                if (ledgerService != null) {
+                    ledgerService.recordOpeningBalance(request.getUserId(), 1000000L, request.getCurrency());
+                }
+            }
+
+            // Record double-entry ledger entries in the SAME database transaction as the balance change
+            if (ledgerService != null) {
+                ledgerService.recordPaymentEntries(
+                        paymentId,
+                        request.getUserId(),
+                        request.getAmount(),
+                        request.getCurrency(),
+                        "Payment debit for " + paymentId
+                );
             }
         }
 

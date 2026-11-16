@@ -23,10 +23,17 @@ import java.util.stream.Collectors;
 public class UserController {
 
     private final UserRepository userRepository;
+    private final com.paymentsystem.service.LedgerService ledgerService;
 
     @Autowired
-    public UserController(UserRepository userRepository) {
+    public UserController(UserRepository userRepository,
+                          @Autowired(required = false) com.paymentsystem.service.LedgerService ledgerService) {
         this.userRepository = userRepository;
+        this.ledgerService = ledgerService;
+    }
+
+    public UserController(UserRepository userRepository) {
+        this(userRepository, null);
     }
 
     @PostMapping
@@ -34,6 +41,9 @@ public class UserController {
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
         User user = new User(request.getUserCode(), request.getName(), request.getEmail(), request.getInitialBalance());
         User saved = userRepository.save(user);
+        if (saved.getBalance() != null && saved.getBalance() > 0 && ledgerService != null) {
+            ledgerService.recordOpeningBalance(saved.getUserCode(), saved.getBalance(), "USD");
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(saved));
     }
 

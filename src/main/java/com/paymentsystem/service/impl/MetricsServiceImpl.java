@@ -30,6 +30,9 @@ public class MetricsServiceImpl implements MetricsService {
     @Autowired(required = false)
     private PaymentTransactionRepository paymentTransactionRepository;
 
+    @Autowired(required = false)
+    private com.paymentsystem.service.LedgerReconciliationService ledgerReconciliationService;
+
     @Override
     public void incrementTotalTransactions() {
         totalTransactions.incrementAndGet();
@@ -117,6 +120,12 @@ public class MetricsServiceImpl implements MetricsService {
             statusMap.put("FAILED", failed);
         }
         response.setStatusBreakdown(statusMap);
+
+        if (ledgerReconciliationService != null) {
+            response.setLedgerMismatchCount(ledgerReconciliationService.getMismatchCount());
+            response.setLastReconciliationTime(ledgerReconciliationService.getLastRunTime());
+            response.setReconciliationStatus(ledgerReconciliationService.getReconciliationStatus());
+        }
 
         return response;
     }

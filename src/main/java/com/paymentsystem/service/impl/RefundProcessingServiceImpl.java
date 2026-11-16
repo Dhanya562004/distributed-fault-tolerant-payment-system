@@ -16,6 +16,7 @@ import com.paymentsystem.repository.RefundTransactionRepository;
 import com.paymentsystem.repository.UserRepository;
 import com.paymentsystem.service.AuditService;
 import com.paymentsystem.service.IdempotencyService;
+import com.paymentsystem.service.LedgerService;
 import com.paymentsystem.service.PaymentTransactionCoordinator;
 import com.paymentsystem.service.RefundProcessingService;
 import org.slf4j.Logger;
@@ -42,6 +43,7 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
     private final IdempotencyService idempotencyService;
     private final ObjectMapper objectMapper;
     private final PaymentTransactionCoordinator paymentCoordinator;
+    private final LedgerService ledgerService;
 
     public RefundProcessingServiceImpl(RefundTransactionRepository refundRepository,
                                        PaymentTransactionRepository paymentRepository,
@@ -49,7 +51,17 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
                                        AuditService auditService,
                                        IdempotencyService idempotencyService,
                                        ObjectMapper objectMapper) {
-        this(refundRepository, paymentRepository, userRepository, auditService, idempotencyService, objectMapper, null);
+        this(refundRepository, paymentRepository, userRepository, auditService, idempotencyService, objectMapper, null, null);
+    }
+
+    public RefundProcessingServiceImpl(RefundTransactionRepository refundRepository,
+                                       PaymentTransactionRepository paymentRepository,
+                                       UserRepository userRepository,
+                                       AuditService auditService,
+                                       IdempotencyService idempotencyService,
+                                       ObjectMapper objectMapper,
+                                       PaymentTransactionCoordinator paymentCoordinator) {
+        this(refundRepository, paymentRepository, userRepository, auditService, idempotencyService, objectMapper, paymentCoordinator, null);
     }
 
     @Autowired
@@ -59,7 +71,8 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
                                        AuditService auditService,
                                        IdempotencyService idempotencyService,
                                        ObjectMapper objectMapper,
-                                       @Autowired(required = false) PaymentTransactionCoordinator paymentCoordinator) {
+                                       @Autowired(required = false) PaymentTransactionCoordinator paymentCoordinator,
+                                       @Autowired(required = false) LedgerService ledgerService) {
         this.refundRepository = refundRepository;
         this.paymentRepository = paymentRepository;
         this.userRepository = userRepository;
@@ -67,6 +80,7 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
         this.idempotencyService = idempotencyService;
         this.objectMapper = objectMapper;
         this.paymentCoordinator = paymentCoordinator;
+        this.ledgerService = ledgerService;
     }
 
     @Override
@@ -126,6 +140,17 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
             user.setBalance(user.getBalance() + request.getAmount());
             userRepository.save(user);
         });
+
+        // Record double-entry ledger entries in the SAME database transaction as the refund
+        if (ledgerService != null) {
+            ledgerService.recordRefundEntries(
+                    refundId,
+                    payment.getUserId(),
+                    request.getAmount(),
+                    payment.getCurrency(),
+                    request.getReason() != null ? request.getReason() : "Refund for payment " + payment.getPaymentId()
+            );
+        }
 
         auditService.recordAuditLog(
                 payment.getPaymentId(),

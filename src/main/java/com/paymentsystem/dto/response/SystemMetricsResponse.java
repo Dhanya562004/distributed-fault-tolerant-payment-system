@@ -15,6 +15,9 @@ public class SystemMetricsResponse {
     private double averageLatencyMs;
     private long activeQueueDepth;
     private Map<String, Long> statusBreakdown;
+    private long ledgerMismatchCount;
+    private Instant lastReconciliationTime;
+    private String reconciliationStatus;
     private Instant timestamp;
 
     public SystemMetricsResponse() {
@@ -99,6 +102,30 @@ public class SystemMetricsResponse {
 
     public void setStatusBreakdown(Map<String, Long> statusBreakdown) {
         this.statusBreakdown = statusBreakdown;
+    }
+
+    public long getLedgerMismatchCount() {
+        return ledgerMismatchCount;
+    }
+
+    public void setLedgerMismatchCount(long ledgerMismatchCount) {
+        this.ledgerMismatchCount = ledgerMismatchCount;
+    }
+
+    public Instant getLastReconciliationTime() {
+        return lastReconciliationTime;
+    }
+
+    public void setLastReconciliationTime(Instant lastReconciliationTime) {
+        this.lastReconciliationTime = lastReconciliationTime;
+    }
+
+    public String getReconciliationStatus() {
+        return reconciliationStatus;
+    }
+
+    public void setReconciliationStatus(String reconciliationStatus) {
+        this.reconciliationStatus = reconciliationStatus;
     }
 
     public Instant getTimestamp() {

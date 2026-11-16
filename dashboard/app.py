@@ -1337,6 +1337,30 @@ with tab_simulate:
 with tab_metrics:
     st.subheader("📈 Financial Analytics & Velocity Observability")
 
+    st.markdown("### ⚖️ Double-Entry Ledger & Reconciliation Engine")
+    rec_c1, rec_c2, rec_c3, rec_c4 = st.columns(4)
+    rec_status = metrics_data.get("reconciliationStatus", "BALANCED")
+    rec_mismatches = metrics_data.get("ledgerMismatchCount", 0)
+    rec_last_time = metrics_data.get("lastReconciliationTime", "N/A")
+
+    with rec_c1:
+        st.metric("Audit Status", rec_status, delta="OK" if rec_status == "BALANCED" else "DISCREPANCY", delta_color="normal" if rec_status == "BALANCED" else "inverse")
+    with rec_c2:
+        st.metric("Ledger Mismatches", rec_mismatches)
+    with rec_c3:
+        st.metric("Last Audit", str(rec_last_time)[:19] if rec_last_time else "N/A")
+    with rec_c4:
+        st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
+        if st.button("🔄 Audit Reconciliation", key="btn_trigger_reconciliation"):
+            resp = api_post("/api/v1/reconciliation/run?cutoffSeconds=0", {})
+            if resp and resp.get("balanced"):
+                st.success("Reconciliation passed: Debits == Credits & Balances match!")
+            else:
+                st.error("Discrepancies detected by reconciliation job!")
+            st.rerun()
+
+    st.markdown("<hr style='border: 1px solid rgba(255,255,255,0.08); margin: 1.5rem 0;'>", unsafe_allow_html=True)
+
     chart_c1, chart_c2 = st.columns(2)
 
     with chart_c1:

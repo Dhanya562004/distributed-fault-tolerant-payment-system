@@ -2,7 +2,7 @@
 
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-007396.svg?style=flat-square&logo=openjdk)](https://www.oracle.com/java/)
 [![Spring Boot 3.3.4](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F.svg?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
-[![Tests](https://img.shields.io/badge/Tests-182%20Passing%20(H2)-10B981.svg?style=flat-square)](docs/testing.md)
+[![Tests](https://img.shields.io/badge/Tests-190%20Passing%20(H2)-10B981.svg?style=flat-square)](docs/testing.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 [![AI Usage](https://img.shields.io/badge/AI%20Usage-Disclosure-8B5CF6.svg?style=flat-square)](AI_USAGE.md)
 
@@ -12,6 +12,7 @@ A fault-tolerant payment processing engine built with Java 17 and Spring Boot 3.
 
 ## What It Does
 
+- **Immutable Double-Entry Ledger & SQL Reconciliation Engine**: Implements a double-entry financial ledger where every payment and refund writes matching `DEBIT` and `CREDIT` entries in the **exact same database transaction** as the balance change. Enforced append-only with Hibernate `@Immutable`, lifecycle callbacks (`@PreUpdate`, `@PreRemove` throwing `UnsupportedOperationException`), and a database unique constraint `(transaction_id, entry_side)` preventing duplicate retry entries. Features a high-performance reconciliation engine that executes pure SQL `SUM()` aggregations across snapshots/cutoffs—verifying that total debits equal total credits **per currency** and each user's wallet balance strictly matches the sum of their ledger rows (`credits - debits`). Mismatches and audit timestamps are logged and exposed live in `/api/v1/metrics`. Verified with tests covering payments, refunds, partial refunds, mid-transaction rollback atomicity, append-only protections, and deliberate row tampering.
 - **Strict 5-State Finite State Machine & Conditional Locking**: Restructures payment state into 5 strict states (`PENDING`, `PROCESSING`, `SUCCESS`, `FAILED`, `REFUNDED`) with exactly 5 permissible transitions (`PENDING -> PROCESSING`, `PENDING -> FAILED`, `PROCESSING -> SUCCESS`, `PROCESSING -> FAILED`, `SUCCESS -> REFUNDED`). Illegal transitions throw `InvalidTransactionStateException` via `PaymentTransaction.transitionTo()`, and direct `setStatus()` has been permanently removed. A partial refund leaves the payment in `SUCCESS` (updating `refundedAmount` and `remainingRefundable`), and transitions to `REFUNDED` only when the cumulative refund reaches the full payment amount. Tested with a hardcoded 25-pair (5x5) truth table in `PaymentStatusTransitionTest`.
 - **Atomic Payment Commit & Transaction Boundary Correctness**: Guarantees that user balance deduction, payment status transition (`SUCCESS`), and transactional outbox event creation commit in **one single atomic database transaction** (`PaymentTransactionCoordinator.executePaymentAttempt`). This eliminates the critical failure mode where a server crash after balance deduction leaves money deducted with no corresponding success record or event. Reloads rows under pessimistic write lock (`SELECT FOR UPDATE`), isolates `PROCESSING` status commits into their own short transaction to prevent pool starvation and version conflicts, and ensures idempotent replays never double-charge. Verified in `AtomicPaymentCommitIntegrationTest`.
 - **API Key Authentication & Tenant Scoping**: Enforces API key authentication across all REST endpoints (via `X-Api-Key` or `Authorization: Bearer <key>`) against the `api_keys` table. Health probes (`/actuator/health`) and OpenAPI docs remain public. Idempotency keys are strictly scoped per API key `(api_key, key_value)`, allowing multi-tenant customers to safely reuse identical idempotency keys (e.g. `ORDER_100`) without collisions or cross-customer data leakage.
@@ -80,8 +81,8 @@ Provisions the backend (`8080`), PostgreSQL (`5432`), MongoDB (`27017`), and Str
 ```bash
 mvn clean test
 ```
-Runs the 182 unit and integration tests (finite state machine transitions, cumulative refund limit checks, atomic payment commit, security filters, API key auth, scoped idempotency, request ID propagation, standardized errors, controllers, service logic, outbox workers, idempotency expiry, stuck-key recovery, queue partitioning, currency service, and pagination).
-- **Status**: 182 passed, 0 failures, 0 errors.
+Runs the 190 unit and integration tests (double-entry ledger debit/credit matching, SQL reconciliation audits, append-only immutability, finite state machine transitions, cumulative refund limit checks, atomic payment commit, security filters, API key auth, scoped idempotency, request ID propagation, standardized errors, controllers, service logic, outbox workers, idempotency expiry, stuck-key recovery, queue partitioning, currency service, and pagination).
+- **Status**: 190 passed, 0 failures, 0 errors.
 
 ### 2. PostgreSQL 16 Testcontainers Suite (Requires Docker)
 ```bash

@@ -15,5 +15,8 @@
     "PROCESSING": 0,
     "PENDING": 0
   },
+  "ledgerMismatchCount": 0,
+  "lastReconciliationTime": "2026-11-01T08:08:54.923108500Z",
+  "reconciliationStatus": "BALANCED",
   "timestamp": "2026-11-01T08:08:54.923108500Z"
 }

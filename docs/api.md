@@ -200,6 +200,20 @@ The following endpoints are **completely safe to test** in the live cloud deploy
 - **Headers**:
   - `X-Api-Key: <CONFIGURED_API_KEY>` (or `Authorization: Bearer <CONFIGURED_API_KEY>`)
 
+### 4.4 Double-Entry Ledger Audit & Reconciliation
+- **Method & Path**: `POST /api/v1/reconciliation/run`
+- **Headers**: `X-Api-Key: <CONFIGURED_API_KEY>`
+- **Query Parameters**: `cutoffSeconds` (Integer, default 0 for immediate audit, or 2 for live production buffer)
+- **Responses**:
+  - `200 OK`: Returns `ReconciliationResult` detailing currency debits/credits parity and user wallet balance fidelity.
+
+### 4.5 Query Immutable Ledger Entries
+- **Method & Path**: `GET /api/v1/ledger/entries`
+- **Headers**: `X-Api-Key: <CONFIGURED_API_KEY>`
+- **Query Parameters**: `transactionId` (Optional), `accountId` (Optional)
+- **Responses**:
+  - `200 OK`: List of immutable, append-only double-entry ledger rows.
+
 ---
 
 ## 5. Security & Secret Protection Guidelines

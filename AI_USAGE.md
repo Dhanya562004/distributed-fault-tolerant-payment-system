@@ -86,13 +86,13 @@ The human project owner directed and governed the development lifecycle:
 
 ### Reported Automated Test Results
 
-The repository test suite consists of **220 total automated tests** across 33 test classes, structured into two execution tiers:
+The repository test suite consists of **232 total automated tests** across 35 test classes, structured into two execution tiers:
 
 | Test Execution Stage | Environment | Test Count | Status | Verified Evidence |
 | :--- | :--- | :---: | :---: | :--- |
-| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 182 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` (182 tests passed in 01:13 min). |
-| **Stage B: Concurrency & Real Database** | PostgreSQL 16 Testcontainers (Docker) | 38 | **Configured** (Docker-dependent) | 38 tests across 7 classes (including concurrency & locking tests in `PostgreSqlRefundConcurrencyTest`, `PostgreSqlIdempotencyTest`, and `PostgreSqlAtomicPaymentCommitIntegrationTest`). Requires running Docker daemon (`mvn test -Ppostgres-it`). |
-| **Total Automated Suite** | Combined | **220** | **182 Passing locally (Docker-free), 38 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
+| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 190 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` (190 tests passed in 01:14 min). |
+| **Stage B: Concurrency & Real Database** | PostgreSQL 16 Testcontainers (Docker) | 42 | **Configured** (Docker-dependent) | 42 tests across 8 classes (including double-entry ledger verification in `PostgreSqlLedgerIntegrationTest`, `PostgreSqlRefundConcurrencyTest`, `PostgreSqlIdempotencyTest`, and `PostgreSqlAtomicPaymentCommitIntegrationTest`). Requires running Docker daemon (`mvn test -Ppostgres-it`). |
+| **Total Automated Suite** | Combined | **232** | **190 Passing locally (Docker-free), 42 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
 
 ### Concurrency Stress Benchmark
 - **Test Implementation:** `ConcurrentPaymentTest` (H2) and `PostgreSqlConcurrencyStressTest` (PostgreSQL 16).
@@ -209,6 +209,17 @@ Transparency regarding AI-assisted development requires acknowledging key techni
 3. **Exception Disambiguation & Assertion Alignment**:
    - *Mistake*: In concurrent refund tests, attempting to refund when cumulative limit is reached was initially expected to throw `InvalidTransactionStateException`, whereas business logic rightly distinguished `CumulativeRefundLimitExceededException` (HTTP 422 `CUMULATIVE_REFUND_LIMIT_EXCEEDED`) for partial over-refund vs `InvalidTransactionStateException` (HTTP 422 `INVALID_TRANSACTION_STATE`) for refunding an already `REFUNDED` payment.
    - *Correction*: Structured distinct exception handling in `GlobalExceptionHandler` and aligned test assertions in both unit and integration tests.
+
+### Phase 4 PR 2 AI Mistakes and Corrections Log
+1. **Un-annotated Multiple Constructors in Spring Beans (`LedgerReconciliationServiceImpl.java`, `LedgerServiceImpl.java`)**:
+   - *Mistake*: Creating multiple overloaded constructors (for testing vs production) without explicit `@Autowired` caused Spring Boot container initialization failure: `Failed to instantiate: No default constructor found`.
+   - *Correction*: Added `@Autowired` to the canonical constructors in both service implementations.
+2. **DTO Class Naming & Return Type Discrepancies in Integration Tests**:
+   - *Mistake*: In `LedgerDoubleEntryIntegrationTest`, tests initially referenced `RefundRequest` instead of `ProcessRefundRequest` and attempted to assign `paymentProcessingService.initiatePayment(...)` to `PaymentTransaction` rather than `PaymentResponse`.
+   - *Correction*: Aligned types with `ProcessRefundRequest` and `PaymentResponse`.
+3. **Shared Database State Contamination in Fast Integration Test**:
+   - *Mistake*: `testDuplicateRetry_UniqueConstraintPreventsDuplicateLedgerRows` and `testAppendOnly_UpdateAndDeleteProhibited` inserted isolated `DEBIT` entries directly against `USR_ALICE` without an offsetting `CREDIT`. Because Spring integration tests share the persistence context across methods, subsequent tests ran into intentional reconciliation failures (`[RECONCILIATION MISMATCH] Currency USD imbalance detected! Diff: 6000`).
+   - *Correction*: Used balanced test transactions and cleaned up direct test fixture inserts inside `finally` blocks, restoring clean state for subsequent tests. All 190 tests pass with 0 errors.
 
 ---
 

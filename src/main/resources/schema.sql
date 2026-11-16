@@ -124,3 +124,24 @@ CREATE INDEX IF NOT EXISTS idx_outbox_status_next_attempt ON outbox_events(statu
 CREATE INDEX IF NOT EXISTS idx_outbox_aggregate_id ON outbox_events(aggregate_id);
 CREATE INDEX IF NOT EXISTS idx_outbox_request_id ON outbox_events(request_id);
 
+-- 6. Double-Entry Ledger Table (Immutable & Append-Only)
+CREATE TABLE IF NOT EXISTS ledger_entries (
+    id BIGSERIAL PRIMARY KEY,
+    entry_id VARCHAR(64) NOT NULL UNIQUE,
+    transaction_id VARCHAR(64) NOT NULL,
+    entry_type VARCHAR(32) NOT NULL,
+    account_id VARCHAR(64) NOT NULL,
+    entry_side VARCHAR(16) NOT NULL,
+    amount BIGINT NOT NULL,
+    currency VARCHAR(8) NOT NULL DEFAULT 'USD',
+    description VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_ledger_tx_side UNIQUE (transaction_id, entry_side)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_entry_id ON ledger_entries(entry_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_account_id ON ledger_entries(account_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_tx_id ON ledger_entries(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_currency_created ON ledger_entries(currency, created_at);
+
+
