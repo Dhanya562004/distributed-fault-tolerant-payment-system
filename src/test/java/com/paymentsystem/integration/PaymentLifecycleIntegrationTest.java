@@ -19,7 +19,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -46,7 +45,7 @@ public class PaymentLifecycleIntegrationTest {
         String idempotencyKey = "IDEM_E2E_" + System.currentTimeMillis();
 
         // 1. Create User
-        CreateUserRequest userReq = new CreateUserRequest(userCode, "E2E Banking Customer", userCode.toLowerCase() + "@bank.com", new BigDecimal("1500.00"));
+        CreateUserRequest userReq = new CreateUserRequest(userCode, "E2E Banking Customer", userCode.toLowerCase() + "@bank.com", 150000L);
         mockMvc.perform(post("/api/v1/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(userReq)))
@@ -55,7 +54,7 @@ public class PaymentLifecycleIntegrationTest {
 
         // 2. Initiate Payment
         InitiatePaymentRequest payReq = new InitiatePaymentRequest(
-                idempotencyKey, userCode, new BigDecimal("250.00"), "USD", "CREDIT_CARD", "E2E Payment Test"
+                idempotencyKey, userCode, 25000L, "USD", "CREDIT_CARD", "E2E Payment Test"
         );
 
         MvcResult payResult = mockMvc.perform(post("/api/v1/payments")
@@ -83,7 +82,7 @@ public class PaymentLifecycleIntegrationTest {
 
         // 4. Repeat Payment with Same Idempotency Key & Different Payload -> 409 Conflict
         InitiatePaymentRequest conflictingPayReq = new InitiatePaymentRequest(
-                idempotencyKey, userCode, new BigDecimal("888.00"), "USD", "CREDIT_CARD", "Conflicting E2E Request"
+                idempotencyKey, userCode, 88800L, "USD", "CREDIT_CARD", "Conflicting E2E Request"
         );
         mockMvc.perform(post("/api/v1/payments")
                         .header("X-Idempotency-Key", idempotencyKey)
@@ -94,7 +93,7 @@ public class PaymentLifecycleIntegrationTest {
 
         // 5. Submit Invalid Payment Request with Negative Amount -> 400 Bad Request
         InitiatePaymentRequest invalidReq = new InitiatePaymentRequest(
-                "IDEM_INVALID_" + System.currentTimeMillis(), userCode, new BigDecimal("-50.00"), "USD", "CREDIT_CARD", "Negative amount"
+                "IDEM_INVALID_" + System.currentTimeMillis(), userCode, -5000L, "USD", "CREDIT_CARD", "Negative amount"
         );
         mockMvc.perform(post("/api/v1/payments")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -111,7 +110,7 @@ public class PaymentLifecycleIntegrationTest {
         // 7. Process Valid Refund
         String refundIdemKey = "IDEM_REF_E2E_" + System.currentTimeMillis();
         ProcessRefundRequest refundReq = new ProcessRefundRequest(
-                payment.getPaymentId(), refundIdemKey, new BigDecimal("100.00"), "Partial refund for goods"
+                payment.getPaymentId(), refundIdemKey, 10000L, "Partial refund for goods"
         );
 
         MvcResult refundResult = mockMvc.perform(post("/api/v1/refunds")
@@ -127,7 +126,7 @@ public class PaymentLifecycleIntegrationTest {
 
         // 8. Submit Excessive Refund Exceeding Remaining Payment Balance -> 422 Unprocessable Entity
         ProcessRefundRequest excessiveRefundReq = new ProcessRefundRequest(
-                payment.getPaymentId(), "IDEM_REF_OVERFLOW_" + System.currentTimeMillis(), new BigDecimal("200.00"), "Exceeds remaining 150 balance"
+                payment.getPaymentId(), "IDEM_REF_OVERFLOW_" + System.currentTimeMillis(), 20000L, "Exceeds remaining 150 balance"
         );
         mockMvc.perform(post("/api/v1/refunds")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -147,7 +146,7 @@ public class PaymentLifecycleIntegrationTest {
         String idempotencyKey = "IDEM_ROLLBACK_" + System.currentTimeMillis();
 
         // 1. Create User with 500.00 balance
-        CreateUserRequest userReq = new CreateUserRequest(userCode, "Rollback Customer", userCode.toLowerCase() + "@test.com", new BigDecimal("500.00"));
+        CreateUserRequest userReq = new CreateUserRequest(userCode, "Rollback Customer", userCode.toLowerCase() + "@test.com", 50000L);
         mockMvc.perform(post("/api/v1/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(userReq)))
@@ -165,7 +164,7 @@ public class PaymentLifecycleIntegrationTest {
         try {
             // 3. Initiate payment of 100.00 (which will fail all retry attempts)
             InitiatePaymentRequest payReq = new InitiatePaymentRequest(
-                    idempotencyKey, userCode, new BigDecimal("100.00"), "USD", "CREDIT_CARD", "Payment doomed to fail"
+                    idempotencyKey, userCode, 10000L, "USD", "CREDIT_CARD", "Payment doomed to fail"
             );
             mockMvc.perform(post("/api/v1/payments")
                             .header("X-Idempotency-Key", idempotencyKey)
@@ -179,8 +178,8 @@ public class PaymentLifecycleIntegrationTest {
                     .andExpect(status().isOk())
                     .andReturn();
             UserResponse userResp = objectMapper.readValue(userResult.getResponse().getContentAsString(), UserResponse.class);
-            assertEquals(0, new BigDecimal("500.00").compareTo(userResp.getBalance()),
-                    "User balance must remain 500.00 after failed payment attempts (no partial commits)");
+            assertEquals(50000L, userResp.getBalance(),
+                    "User balance must remain 50000 after failed payment attempts (no partial commits)");
         } finally {
             // Reset simulation config
             mockMvc.perform(post("/api/v1/simulation/reset")).andExpect(status().isOk());

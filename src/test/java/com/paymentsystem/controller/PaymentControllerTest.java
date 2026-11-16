@@ -18,7 +18,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -53,14 +52,14 @@ class PaymentControllerTest {
     @DisplayName("POST /api/v1/payments should return 201 CREATED for valid synchronous payment")
     void testInitiatePayment_Sync_ReturnsCreated() throws Exception {
         InitiatePaymentRequest request = new InitiatePaymentRequest(
-                "IDEM_CTRL_1", "USR_ALICE", new BigDecimal("120.00"), "USD", "CREDIT_CARD", "Checkout payment"
+                "IDEM_CTRL_1", "USR_ALICE", 12000L, "USD", "CREDIT_CARD", "Checkout payment"
         );
 
         PaymentResponse response = new PaymentResponse();
         response.setPaymentId("PAY_CTRL_101");
         response.setIdempotencyKey("IDEM_CTRL_1");
         response.setUserId("USR_ALICE");
-        response.setAmount(new BigDecimal("120.00"));
+        response.setAmount(12000L);
         response.setStatus(PaymentStatus.SUCCESS);
 
         when(paymentProcessingService.initiatePayment(any(InitiatePaymentRequest.class))).thenReturn(response);
@@ -78,7 +77,7 @@ class PaymentControllerTest {
     @DisplayName("POST /api/v1/payments should return 409 CONFLICT on PayloadMismatchException")
     void testInitiatePayment_PayloadMismatch_ReturnsConflict() throws Exception {
         InitiatePaymentRequest request = new InitiatePaymentRequest(
-                "IDEM_MISMATCH", "USR_ALICE", new BigDecimal("500.00"), "USD", "CREDIT_CARD", "Conflicting amount"
+                "IDEM_MISMATCH", "USR_ALICE", 50000L, "USD", "CREDIT_CARD", "Conflicting amount"
         );
 
         when(paymentProcessingService.initiatePayment(any(InitiatePaymentRequest.class)))
@@ -95,14 +94,14 @@ class PaymentControllerTest {
     @DisplayName("POST /api/v1/payments should include Idempotent-Replayed: true header when response is cached")
     void testInitiatePayment_CachedReplay_ReturnsIdempotentReplayedHeader() throws Exception {
         InitiatePaymentRequest request = new InitiatePaymentRequest(
-                "IDEM_CTRL_REPLAY", "USR_ALICE", new BigDecimal("120.00"), "USD", "CREDIT_CARD", "Replay payment"
+                "IDEM_CTRL_REPLAY", "USR_ALICE", 12000L, "USD", "CREDIT_CARD", "Replay payment"
         );
 
         PaymentResponse response = new PaymentResponse();
         response.setPaymentId("PAY_CTRL_101");
         response.setIdempotencyKey("IDEM_CTRL_REPLAY");
         response.setUserId("USR_ALICE");
-        response.setAmount(new BigDecimal("120.00"));
+        response.setAmount(12000L);
         response.setStatus(PaymentStatus.SUCCESS);
         response.setIsCachedIdempotentResponse(true);
 
@@ -122,14 +121,14 @@ class PaymentControllerTest {
     @DisplayName("POST /api/v1/payments should NOT include Idempotent-Replayed header on original payment execution")
     void testInitiatePayment_OriginalExecution_DoesNotReturnReplayHeader() throws Exception {
         InitiatePaymentRequest request = new InitiatePaymentRequest(
-                "IDEM_CTRL_ORIG", "USR_ALICE", new BigDecimal("120.00"), "USD", "CREDIT_CARD", "Original payment"
+                "IDEM_CTRL_ORIG", "USR_ALICE", 12000L, "USD", "CREDIT_CARD", "Original payment"
         );
 
         PaymentResponse response = new PaymentResponse();
         response.setPaymentId("PAY_CTRL_102");
         response.setIdempotencyKey("IDEM_CTRL_ORIG");
         response.setUserId("USR_ALICE");
-        response.setAmount(new BigDecimal("120.00"));
+        response.setAmount(12000L);
         response.setStatus(PaymentStatus.SUCCESS);
         response.setIsCachedIdempotentResponse(false);
 

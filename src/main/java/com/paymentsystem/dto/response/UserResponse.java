@@ -1,6 +1,5 @@
 package com.paymentsystem.dto.response;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 
 public class UserResponse {
@@ -9,7 +8,7 @@ public class UserResponse {
     private String userCode;
     private String name;
     private String email;
-    private BigDecimal balance;
+    private Long balance;
     private Long version;
     private Instant createdAt;
 
@@ -48,11 +47,11 @@ public class UserResponse {
         this.email = email;
     }
 
-    public BigDecimal getBalance() {
+    public Long getBalance() {
         return balance;
     }
 
-    public void setBalance(BigDecimal balance) {
+    public void setBalance(Long balance) {
         this.balance = balance;
     }
 

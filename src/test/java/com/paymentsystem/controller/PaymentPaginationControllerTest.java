@@ -17,7 +17,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -51,7 +50,7 @@ class PaymentPaginationControllerTest {
     @DisplayName("GET /api/v1/payments/transactions should return 200 OK with valid API key")
     void testGetTransactions_ValidApiKey_Returns200() throws Exception {
         PaymentTransactionResponse tx = new PaymentTransactionResponse(
-                "PAY_001", "PAY_001", "USR_ALICE", new BigDecimal("100.00"), "USD",
+                "PAY_001", "PAY_001", "USR_ALICE", 10000L, "USD",
                 PaymentStatus.SUCCESS, "CREDIT_CARD", "Test", Instant.now(), Instant.now()
         );
         PagedPaymentResponse response = new PagedPaymentResponse(

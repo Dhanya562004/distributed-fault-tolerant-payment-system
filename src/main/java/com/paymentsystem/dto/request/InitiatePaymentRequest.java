@@ -1,9 +1,8 @@
 package com.paymentsystem.dto.request;
 
-import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import java.math.BigDecimal;
 
 public class InitiatePaymentRequest {
 
@@ -13,8 +12,8 @@ public class InitiatePaymentRequest {
     private String userId;
 
     @NotNull(message = "Amount is required")
-    @DecimalMin(value = "0.01", message = "Amount must be greater than zero")
-    private BigDecimal amount;
+    @Min(value = 1, message = "Amount must be greater than zero")
+    private Long amount;
 
     @NotBlank(message = "Currency is required")
     private String currency = "USD";
@@ -28,7 +27,7 @@ public class InitiatePaymentRequest {
     public InitiatePaymentRequest() {
     }
 
-    public InitiatePaymentRequest(String idempotencyKey, String userId, BigDecimal amount, String currency, String paymentMethod, String description) {
+    public InitiatePaymentRequest(String idempotencyKey, String userId, Long amount, String currency, String paymentMethod, String description) {
         this.idempotencyKey = idempotencyKey;
         this.userId = userId;
         this.amount = amount;
@@ -53,11 +52,11 @@ public class InitiatePaymentRequest {
         this.userId = userId;
     }
 
-    public BigDecimal getAmount() {
+    public Long getAmount() {
         return amount;
     }
 
-    public void setAmount(BigDecimal amount) {
+    public void setAmount(Long amount) {
         this.amount = amount;
     }
 

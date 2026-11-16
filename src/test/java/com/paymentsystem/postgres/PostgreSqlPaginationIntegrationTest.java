@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -68,7 +67,7 @@ public class PostgreSqlPaginationIntegrationTest extends AbstractPostgreSqlInteg
         userRepository.deleteAll();
 
         // Seed test user
-        User user = new User("USR_PG_TEST", "Postgres User", "pg@example.com", new BigDecimal("50000.0000"));
+        User user = new User("USR_PG_TEST", "Postgres User", "pg@example.com", 5000000L);
         userRepository.saveAndFlush(user);
     }
 
@@ -77,7 +76,7 @@ public class PostgreSqlPaginationIntegrationTest extends AbstractPostgreSqlInteg
                 paymentId,
                 "IDEM_" + paymentId,
                 "USR_PG_TEST",
-                new BigDecimal("100.0000"),
+                10000L,
                 "USD",
                 "CREDIT_CARD",
                 "Pg Payment " + paymentId
@@ -317,13 +316,13 @@ public class PostgreSqlPaginationIntegrationTest extends AbstractPostgreSqlInteg
     @DisplayName("PG Scenario 10: Existing payment transaction creation behaves correctly on PostgreSQL")
     void testExistingPaymentCreationIntact() {
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                "IDEM_PG_REG_01", "USR_PG_TEST", new BigDecimal("250.00"), "USD", "CREDIT_CARD", "PG Regression Check"
+                "IDEM_PG_REG_01", "USR_PG_TEST", 25000L, "USD", "CREDIT_CARD", "PG Regression Check"
         );
 
         PaymentResponse resp = paymentProcessingService.initiatePayment(req);
         assertNotNull(resp);
         assertEquals(PaymentStatus.SUCCESS, resp.getStatus());
-        assertEquals(new BigDecimal("250.00"), resp.getAmount());
+        assertEquals(25000L, resp.getAmount());
 
         PaymentTransaction inDb = paymentRepository.findByPaymentId(resp.getPaymentId()).orElseThrow();
         assertEquals(PaymentStatus.SUCCESS, inDb.getStatus());
@@ -333,7 +332,7 @@ public class PostgreSqlPaginationIntegrationTest extends AbstractPostgreSqlInteg
     @DisplayName("PG Scenario 11: Existing idempotency cached replay behaves correctly on PostgreSQL")
     void testExistingIdempotencyBehaviorIntact() {
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                "IDEM_PG_IDEM_REPLAY", "USR_PG_TEST", new BigDecimal("75.00"), "USD", "CREDIT_CARD", "PG Idempotency"
+                "IDEM_PG_IDEM_REPLAY", "USR_PG_TEST", 7500L, "USD", "CREDIT_CARD", "PG Idempotency"
         );
 
         PaymentResponse first = paymentProcessingService.initiatePayment(req);
@@ -348,7 +347,7 @@ public class PostgreSqlPaginationIntegrationTest extends AbstractPostgreSqlInteg
     @DisplayName("PG Scenario 12: Existing transactional outbox behavior atomically records events on PostgreSQL")
     void testExistingOutboxBehaviorIntact() {
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                "IDEM_PG_OUTBOX_CHK", "USR_PG_TEST", new BigDecimal("80.00"), "USD", "CREDIT_CARD", "PG Outbox Check"
+                "IDEM_PG_OUTBOX_CHK", "USR_PG_TEST", 8000L, "USD", "CREDIT_CARD", "PG Outbox Check"
         );
 
         PaymentResponse resp = paymentProcessingService.initiatePayment(req);

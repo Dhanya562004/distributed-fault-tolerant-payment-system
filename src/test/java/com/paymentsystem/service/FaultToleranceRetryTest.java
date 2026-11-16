@@ -17,7 +17,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -70,8 +69,8 @@ class FaultToleranceRetryTest {
     @DisplayName("Should recover and succeed on second attempt after transient gateway failure")
     void testRetryRecovery_TransientGatewayError() {
         String key = "IDEM_RETRY_3001";
-        InitiatePaymentRequest req = new InitiatePaymentRequest(key, "USR_CHARLIE", new BigDecimal("50.00"), "USD", "DEBIT_CARD", "Retry test");
-        User user = new User("USR_CHARLIE", "Charlie", "charlie@example.com", new BigDecimal("1000.00"));
+        InitiatePaymentRequest req = new InitiatePaymentRequest(key, "USR_CHARLIE", 5000L, "USD", "DEBIT_CARD", "Retry test");
+        User user = new User("USR_CHARLIE", "Charlie", "charlie@example.com", 100000L);
 
         when(idempotencyService.tryAcquireOrGet(key, req)).thenReturn(Optional.empty());
         when(userRepository.findByUserCode("USR_CHARLIE")).thenReturn(Optional.of(user));

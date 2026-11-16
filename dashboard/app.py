@@ -74,7 +74,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_9A8B7C6D5E4F3A21",
             "idempotencyKey": "IDEM_AWS_99182",
             "userId": "USR_ALICE",
-            "amount": 1250.00,
+            "amount": 125000,
             "currency": "USD",
             "status": "SUCCESS",
             "paymentMethod": "CREDIT_CARD",
@@ -88,7 +88,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_3D7E8F1A2B5C6D7E",
             "idempotencyKey": "IDEM_STP_33910",
             "userId": "USR_CHARLIE",
-            "amount": 3450.00,
+            "amount": 345000,
             "currency": "USD",
             "status": "SUCCESS",
             "paymentMethod": "BANK_TRANSFER",
@@ -102,7 +102,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_1B2C3D4E5F6A7B8C",
             "idempotencyKey": "IDEM_SHP_44812",
             "userId": "USR_BOB",
-            "amount": 89.99,
+            "amount": 8999,
             "currency": "USD",
             "status": "REFUNDED",
             "paymentMethod": "APPLE_PAY",
@@ -116,7 +116,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_7A8B9C0D1E2F3A4B",
             "idempotencyKey": "IDEM_GH_77218",
             "userId": "USR_DAVID",
-            "amount": 420.00,
+            "amount": 42000,
             "currency": "USD",
             "status": "SUCCESS",
             "paymentMethod": "CREDIT_CARD",
@@ -130,7 +130,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_5C6D7E8F9A0B1C2D",
             "idempotencyKey": "IDEM_RZP_11928",
             "userId": "USR_CHARLIE",
-            "amount": 45000.00,
+            "amount": 4500000,
             "currency": "INR",
             "status": "SUCCESS",
             "paymentMethod": "UPI",
@@ -144,7 +144,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_2E3F4A5B6C7D8E9F",
             "idempotencyKey": "IDEM_DC_88192",
             "userId": "USR_ALICE",
-            "amount": 950.00,
+            "amount": 95000,
             "currency": "GBP",
             "status": "SUCCESS",
             "paymentMethod": "BANK_TRANSFER",
@@ -158,7 +158,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_8F9A0B1C2D3E4F5A",
             "idempotencyKey": "IDEM_LH_55918",
             "userId": "USR_BOB",
-            "amount": 650.00,
+            "amount": 65000,
             "currency": "EUR",
             "status": "SUCCESS",
             "paymentMethod": "CREDIT_CARD",
@@ -172,7 +172,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_4A5B6C7D8E9F0A1B",
             "idempotencyKey": "IDEM_APL_33019",
             "userId": "USR_BOB",
-            "amount": 120.00,
+            "amount": 12000,
             "currency": "USD",
             "status": "SUCCESS",
             "paymentMethod": "CREDIT_CARD",
@@ -186,7 +186,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_0D1E2F3A4B5C6D7E",
             "idempotencyKey": "IDEM_NFLX_1029",
             "userId": "USR_ALICE",
-            "amount": 14.99,
+            "amount": 1499,
             "currency": "USD",
             "status": "SUCCESS",
             "paymentMethod": "DEBIT_CARD",
@@ -200,7 +200,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_6E7F8A9B0C1D2E3F",
             "idempotencyKey": "IDEM_FIG_22019",
             "userId": "USR_CHARLIE",
-            "amount": 1800.00,
+            "amount": 180000,
             "currency": "USD",
             "status": "SUCCESS",
             "paymentMethod": "CREDIT_CARD",
@@ -214,7 +214,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_9B0C1D2E3F4A5B6C",
             "idempotencyKey": "IDEM_STM_99182",
             "userId": "USR_BOB",
-            "amount": 59.99,
+            "amount": 5999,
             "currency": "USD",
             "status": "FAILED",
             "paymentMethod": "DEBIT_CARD",
@@ -228,7 +228,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_3A4B5C6D7E8F9A0B",
             "idempotencyKey": "IDEM_DD_66192",
             "userId": "USR_DAVID",
-            "amount": 299.00,
+            "amount": 29900,
             "currency": "USD",
             "status": "SUCCESS",
             "paymentMethod": "CREDIT_CARD",
@@ -242,7 +242,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_8B9C0D1E2F3A4B5C",
             "idempotencyKey": "IDEM_UBR_99214",
             "userId": "USR_DAVID",
-            "amount": 35.50,
+            "amount": 3550,
             "currency": "USD",
             "status": "SUCCESS",
             "paymentMethod": "WALLET",
@@ -256,7 +256,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_2A3B4C5D6E7F8A9B",
             "idempotencyKey": "IDEM_REM_55102",
             "userId": "USR_CHARLIE",
-            "amount": 950.00,
+            "amount": 95000,
             "currency": "GBP",
             "status": "FAILED",
             "paymentMethod": "BANK_TRANSFER",
@@ -270,7 +270,7 @@ def generate_initial_realistic_payments():
             "paymentId": "PAY_4D5E6F7A8B9C0D1E",
             "idempotencyKey": "IDEM_OAI_44921",
             "userId": "USR_CHARLIE",
-            "amount": 512.40,
+            "amount": 51240,
             "currency": "USD",
             "status": "SUCCESS",
             "paymentMethod": "CREDIT_CARD",
@@ -544,7 +544,7 @@ def api_post(endpoint, payload, headers=None):
             "paymentId": payment_id,
             "idempotencyKey": idem_key,
             "userId": payload.get("userId", "USR_ALICE"),
-            "amount": float(payload.get("amount", 100.0)),
+            "amount": int(payload.get("amount", 10000)),
             "currency": payload.get("currency", "USD"),
             "status": status,
             "paymentMethod": payload.get("paymentMethod", "CREDIT_CARD"),
@@ -576,7 +576,7 @@ def api_post(endpoint, payload, headers=None):
 
     elif endpoint == "/api/v1/refunds":
         payment_id = payload.get("paymentId")
-        refund_amount = payload.get("amount", 100.0)
+        refund_amount = int(payload.get("amount", 10000))
         now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         found = False
@@ -602,7 +602,7 @@ def api_post(endpoint, payload, headers=None):
             "newStatus": "REFUNDED",
             "action": "REFUND_PROCESSED",
             "workerId": "WORKER_REFUND",
-            "detail": f"Refund of ${refund_amount} processed and balance returned",
+            "detail": f"Refund of ${refund_amount / 100.0:.2f} processed and balance returned",
             "timestamp": now_str
         })
 
@@ -719,12 +719,13 @@ else:
 
 live_dlq = metrics_data.get("dlqCount", 0)
 
-# Compute Gross Volume in USD approximation
+# Compute Gross Volume in USD approximation (amount is in minor units, e.g. cents)
 def compute_gross_volume(payments):
     total_usd = 0.0
     for p in payments:
         if p.get("status") in ["SUCCESS", "REFUNDED"]:
-            amt = float(p.get("amount", 0.0))
+            raw_amt = float(p.get("amount", 0.0))
+            amt = raw_amt / 100.0
             curr = p.get("currency", "USD")
             if curr == "EUR":
                 total_usd += amt * 1.08
@@ -765,7 +766,7 @@ with col_sb2:
         for u, amt, curr, method, desc in sample_batch:
             idem = f"IDEM_SEED_{int(time.time()*1000)}_{random.randint(100, 999)}"
             api_post("/api/v1/payments", {
-                "userId": u, "amount": amt, "currency": curr,
+                "userId": u, "amount": int(round(amt * 100)), "currency": curr,
                 "paymentMethod": method, "description": desc,
                 "idempotencyKey": idem, "asyncProcessing": random.choice([True, False])
             }, headers={"X-Idempotency-Key": idem})
@@ -944,7 +945,7 @@ with tab_live:
             for u, amt, curr, meth, desc in burst_samples:
                 idem = f"IDEM_BURST_{int(time.time()*1000)}_{random.randint(1000, 9999)}"
                 api_post("/api/v1/payments", {
-                    "userId": u, "amount": amt, "currency": curr,
+                    "userId": u, "amount": int(round(amt * 100)), "currency": curr,
                     "paymentMethod": meth, "description": desc,
                     "idempotencyKey": idem, "asyncProcessing": True
                 }, headers={"X-Idempotency-Key": idem})
@@ -981,6 +982,8 @@ with tab_live:
         df = pd.DataFrame(filtered_payments)
         if "createdAt" in df.columns:
             df["createdAt"] = df["createdAt"].apply(format_timestamp_safe)
+        if "amount" in df.columns:
+            df["amount"] = df["amount"].apply(lambda a: float(a) / 100.0 if a is not None else 0.0)
 
         display_cols = [c for c in ["paymentId", "userId", "amount", "currency", "status", "paymentMethod", "retryCount", "description", "createdAt"] if c in df.columns]
         
@@ -1007,7 +1010,7 @@ with tab_live:
         st.subheader("🔍 Transaction Forensic Inspector")
         st.write("Select any transaction to inspect its idempotency tokens, partition shard routing, and exact audit transition path.")
 
-        tx_options = [f"{p['paymentId']} | {p['userId']} | ${p['amount']:.2f} {p['currency']} | {p['status']} ({p.get('description', '')})" for p in filtered_payments]
+        tx_options = [f"{p['paymentId']} | {p['userId']} | ${float(p['amount'])/100.0:.2f} {p['currency']} | {p['status']} ({p.get('description', '')})" for p in filtered_payments]
         selected_tx_idx = st.selectbox("Inspect Transaction Forensic Record", options=range(len(tx_options)), format_func=lambda i: tx_options[i])
         selected_tx = filtered_payments[selected_tx_idx]
 
@@ -1029,7 +1032,7 @@ with tab_live:
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
                     <div style="background: rgba(0,0,0,0.25); padding: 10px; border-radius: 8px;">
                         <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase;">Amount & Currency</div>
-                        <div style="font-size: 1.1rem; font-weight: 700; color: #38bdf8;">${selected_tx.get('amount', 0):.2f} {selected_tx.get('currency')}</div>
+                        <div style="font-size: 1.1rem; font-weight: 700; color: #38bdf8;">${float(selected_tx.get('amount', 0))/100.0:.2f} {selected_tx.get('currency')}</div>
                     </div>
                     <div style="background: rgba(0,0,0,0.25); padding: 10px; border-radius: 8px;">
                         <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase;">Payment Rail</div>
@@ -1055,7 +1058,7 @@ with tab_live:
             if selected_tx.get("status") == "SUCCESS":
                 target_pid = selected_tx.get("paymentId")
                 with st.form(f"refund_quick_{target_pid}"):
-                    st.write(f"Issue refund for **${selected_tx.get('amount'):.2f} {selected_tx.get('currency')}**")
+                    st.write(f"Issue refund for **${float(selected_tx.get('amount', 0))/100.0:.2f} {selected_tx.get('currency')}**")
                     reason_input = st.text_input("Refund Reason", value="Customer initiated portal return")
                     if st.form_submit_button("💸 Process Instant Refund", use_container_width=True):
                         if not target_pid or not str(target_pid).strip():
@@ -1064,7 +1067,7 @@ with tab_live:
                             quick_idem = f"REF_IDEM_{int(time.time()*1000)}"
                             ref_status, ref_data = api_post("/api/v1/refunds", {
                                 "paymentId": str(target_pid).strip(),
-                                "amount": float(selected_tx.get("amount", 100.0)),
+                                "amount": int(round(float(selected_tx.get("amount", 10000)))),
                                 "idempotencyKey": quick_idem,
                                 "reason": reason_input
                             }, headers={"X-Idempotency-Key": quick_idem})
@@ -1151,7 +1154,7 @@ with tab_simulate:
             if submitted:
                 payload = {
                     "userId": userId,
-                    "amount": amount,
+                    "amount": int(round(float(amount) * 100)),
                     "currency": currency,
                     "paymentMethod": paymentMethod,
                     "idempotencyKey": idempotencyKey,
@@ -1182,9 +1185,9 @@ with tab_simulate:
 
         refund_options = []
         if refundable_payments:
-            refund_options = [f"{p['paymentId']} (${float(p.get('amount', 0)):.2f} {p.get('currency', 'USD')} - {p.get('userId')})" for p in refundable_payments]
+            refund_options = [f"{p['paymentId']} (${float(p.get('amount', 0))/100.0:.2f} {p.get('currency', 'USD')} - {p.get('userId')})" for p in refundable_payments]
         elif all_available_payments:
-            refund_options = [f"{p['paymentId']} (${float(p.get('amount', 0)):.2f} {p.get('currency', 'USD')} - {p.get('status')})" for p in all_available_payments]
+            refund_options = [f"{p['paymentId']} (${float(p.get('amount', 0))/100.0:.2f} {p.get('currency', 'USD')} - {p.get('status')})" for p in all_available_payments]
 
         refund_options.append("✍️ Enter Custom Payment ID manually")
 
@@ -1200,7 +1203,7 @@ with tab_simulate:
             chosen_id = selected_refund_option.split(" ")[0]
             selected_pay_obj = next((p for p in payments_list if p.get("paymentId") == chosen_id), None)
             default_payment_id = chosen_id
-            default_refund_amount = float(selected_pay_obj.get("amount", 89.99)) if selected_pay_obj else 89.99
+            default_refund_amount = (float(selected_pay_obj.get("amount", 8999)) / 100.0) if selected_pay_obj else 89.99
         else:
             default_payment_id = ""
             default_refund_amount = 89.99
@@ -1230,7 +1233,7 @@ with tab_simulate:
                 else:
                     payload = {
                         "paymentId": clean_pid,
-                        "amount": float(refundAmount),
+                        "amount": int(round(float(refundAmount) * 100)),
                         "idempotencyKey": refundIdemKey.strip() or f"REF_IDEM_{int(time.time()*1000)}",
                         "reason": refundReason
                     }
@@ -1315,6 +1318,8 @@ with tab_metrics:
             df_time = pd.DataFrame(payments_list)
             if "createdAt" in df_time.columns:
                 df_time["timestamp"] = pd.to_datetime(df_time["createdAt"], errors="coerce")
+                if "amount" in df_time.columns:
+                    df_time["amount"] = df_time["amount"].apply(lambda a: float(a) / 100.0 if a is not None else 0.0)
                 df_time = df_time.dropna(subset=["timestamp"]).sort_values("timestamp")
                 if not df_time.empty:
                     fig_hist = px.histogram(
@@ -1346,9 +1351,9 @@ with tab_metrics:
 # ---------------------------------------------------------
 with tab_workers:
     st.subheader("⚙️ Partition Worker Pool & Distributed Resilience Matrix")
-    st.write("Visualizes multi-threaded hash partition concurrency (`hash(userId) % 4`), active consumer loops, and Resilience4j circuit breaker state.")
+    st.write("Visualizes multi-threaded hash partition concurrency (`Math.floorMod(userId.hashCode(), 4)`), active consumer loops, and Resilience4j circuit breaker state.")
 
-    # Java compatible hash function for exact shard alignment
+    # Java compatible hash function for exact shard alignment using Math.floorMod
     def java_string_hash(s):
         if not s:
             return 0
@@ -1357,7 +1362,7 @@ with tab_workers:
             h = (31 * h + ord(ch)) & 0xFFFFFFFF
         if h >= 0x80000000:
             h -= 0x100000000
-        return abs(h)
+        return h % 4
 
     # 4 Partition Workers Grid
     w_cols = st.columns(4)

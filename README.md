@@ -2,7 +2,7 @@
 
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-007396.svg?style=flat-square&logo=openjdk)](https://www.oracle.com/java/)
 [![Spring Boot 3.3.4](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F.svg?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
-[![Tests](https://img.shields.io/badge/Tests-129%20Passing%20(H2)-10B981.svg?style=flat-square)](docs/testing.md)
+[![Tests](https://img.shields.io/badge/Tests-134%20Passing%20(H2)-10B981.svg?style=flat-square)](docs/testing.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 [![AI Usage](https://img.shields.io/badge/AI%20Usage-Disclosure-8B5CF6.svg?style=flat-square)](AI_USAGE.md)
 
@@ -17,6 +17,7 @@ A fault-tolerant payment processing engine built with Java 17 and Spring Boot 3.
 - **Failure Taxonomy & Full Jitter Retry Policies**: Differentiates between non-retryable business failures (e.g., insufficient funds, payload mismatches) which fail immediately, and retryable infrastructure failures (e.g., downstream socket timeouts, HTTP 503) which retry with exponential backoff and real Full Jitter (uniform random delay between 0 and the capped backoff). Repeated failures route to a Dead Letter Queue (DLQ).
 - **Transactional Outbox & Webhook Engine**: Commits domain events atomically within the payment transaction, then asynchronously dispatches signed webhook payloads (HMAC-SHA256) with lease-based crash recovery and retry management. Webhook payloads include a timestamp (`timestamp.payload`) and requests older than 5 minutes (300 seconds) are rejected to prevent replay attacks, with full test coverage.
 - **Cumulative Refund Validation**: Validates partial and full refunds against the original payment total, rejecting any attempt that exceeds the captured amount.
+- **Whole Minor Units Money Representation**: Money is strictly modeled as integer amounts in the smallest currency unit (e.g., cents/paise) using `BIGINT` (Java `Long`), eliminating all floating-point rounding errors. A `currencies` database table tracks ISO-4217 currency codes and their decimal precisions (`USD`, `EUR`, `GBP`, `INR` = 2).
 - **Keyset Pagination**: Implements deterministic cursor-based pagination (`createdAt DESC, id DESC`) with HMAC-SHA256 cursor integrity verification, avoiding SQL `OFFSET` performance penalties.
 
 ---
@@ -74,14 +75,14 @@ Provisions the backend (`8080`), PostgreSQL (`5432`), MongoDB (`27017`), and Str
 ```bash
 mvn clean test
 ```
-Runs the 129 unit and integration tests (controllers, service logic, outbox workers, idempotency expiry, stuck-key recovery, queue partitioning, and pagination).
-- **Status**: 129 passed, 0 failures, 0 errors.
+Runs the 134 unit and integration tests (controllers, service logic, outbox workers, idempotency expiry, stuck-key recovery, queue partitioning, currency service, and pagination).
+- **Status**: 134 passed, 0 failures, 0 errors.
 
 ### 2. PostgreSQL 16 Testcontainers Suite (Requires Docker)
 ```bash
 mvn test -Ppostgres-it
 ```
-Runs 35 database-level concurrency tests against a real PostgreSQL 16 container, verifying row-level locking (`SELECT FOR UPDATE`), optimistic locking (`@Version`), MVCC transaction isolation, and outbox event claiming.
+Runs 38 database-level concurrency tests against a real PostgreSQL 16 container, verifying row-level locking (`SELECT FOR UPDATE`), optimistic locking (`@Version`), MVCC transaction isolation, outbox event claiming, and stuck-key recovery.
 - **Status**: Passes in environments where Docker is running (e.g. GitHub Actions CI). In environments without Docker running, this command fails during container startup.
 
 ### 3. In-Process Concurrency Benchmark

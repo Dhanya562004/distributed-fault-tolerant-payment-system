@@ -1,7 +1,6 @@
 package com.paymentsystem.entity;
 
 import jakarta.persistence.*;
-import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
@@ -23,8 +22,8 @@ public class User {
     @Column(name = "email", nullable = false)
     private String email;
 
-    @Column(name = "balance", nullable = false, precision = 19, scale = 4)
-    private BigDecimal balance;
+    @Column(name = "balance", nullable = false)
+    private Long balance;
 
     @Version
     @Column(name = "version")
@@ -39,7 +38,7 @@ public class User {
     public User() {
     }
 
-    public User(String userCode, String name, String email, BigDecimal balance) {
+    public User(String userCode, String name, String email, Long balance) {
         this.userCode = userCode;
         this.name = name;
         this.email = email;
@@ -91,11 +90,11 @@ public class User {
         this.email = email;
     }
 
-    public BigDecimal getBalance() {
+    public Long getBalance() {
         return balance;
     }
 
-    public void setBalance(BigDecimal balance) {
+    public void setBalance(Long balance) {
         this.balance = balance;
     }
 

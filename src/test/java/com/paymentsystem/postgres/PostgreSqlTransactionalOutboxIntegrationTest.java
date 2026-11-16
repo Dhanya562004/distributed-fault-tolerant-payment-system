@@ -23,7 +23,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
@@ -69,9 +68,9 @@ public class PostgreSqlTransactionalOutboxIntegrationTest extends AbstractPostgr
 
         // Seed users to satisfy foreign key constraints fk_payments_user in PostgreSQL
         userRepository.findByUserCode("USR_ALICE").orElseGet(() ->
-                userRepository.saveAndFlush(new User("USR_ALICE", "Alice", "alice@pg.test", new BigDecimal("1000.0000"))));
+                userRepository.saveAndFlush(new User("USR_ALICE", "Alice", "alice@pg.test", 100000L)));
         userRepository.findByUserCode("USR_BOB").orElseGet(() ->
-                userRepository.saveAndFlush(new User("USR_BOB", "Bob", "bob@pg.test", new BigDecimal("1000.0000"))));
+                userRepository.saveAndFlush(new User("USR_BOB", "Bob", "bob@pg.test", 100000L)));
     }
 
     @Test
@@ -79,7 +78,7 @@ public class PostgreSqlTransactionalOutboxIntegrationTest extends AbstractPostgr
     void testPaymentAndOutbox_AtomicityOnPostgreSql() {
         String paymentId = "PAY_PG_ATOM_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         PaymentTransaction tx = new PaymentTransaction(paymentId, "IDEM_" + paymentId, "USR_ALICE",
-                new BigDecimal("250.00"), "USD", "CREDIT_CARD", "PG Atomicity Test");
+                25000L, "USD", "CREDIT_CARD", "PG Atomicity Test");
 
         paymentCoordinator.commitPaymentSuccess(tx);
 
@@ -102,7 +101,7 @@ public class PostgreSqlTransactionalOutboxIntegrationTest extends AbstractPostgr
         assertThrows(RuntimeException.class, () -> {
             txTemplate.executeWithoutResult(status -> {
                 PaymentTransaction tx = new PaymentTransaction(paymentId, "IDEM_" + paymentId, "USR_BOB",
-                        new BigDecimal("500.00"), "USD", "CREDIT_CARD", "Rollback Test");
+                        50000L, "USD", "CREDIT_CARD", "Rollback Test");
                 tx.setStatus(PaymentStatus.SUCCESS);
                 paymentRepository.saveAndFlush(tx);
 

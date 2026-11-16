@@ -2,7 +2,6 @@ package com.paymentsystem.dto.response;
 
 import com.paymentsystem.entity.PaymentStatus;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 
 public class PaymentResponse {
@@ -10,7 +9,7 @@ public class PaymentResponse {
     private String paymentId;
     private String idempotencyKey;
     private String userId;
-    private BigDecimal amount;
+    private Long amount;
     private String currency;
     private PaymentStatus status;
     private String paymentMethod;
@@ -48,11 +47,11 @@ public class PaymentResponse {
         this.userId = userId;
     }
 
-    public BigDecimal getAmount() {
+    public Long getAmount() {
         return amount;
     }
 
-    public void setAmount(BigDecimal amount) {
+    public void setAmount(Long amount) {
         this.amount = amount;
     }
 

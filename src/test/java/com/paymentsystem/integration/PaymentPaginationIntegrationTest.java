@@ -18,7 +18,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -61,7 +60,7 @@ class PaymentPaginationIntegrationTest {
                 paymentId,
                 "IDEM_" + paymentId,
                 "USR_DEEKSHA",
-                new BigDecimal("500.0000"),
+                50000L,
                 "USD",
                 "CREDIT_CARD",
                 "Transaction " + paymentId
@@ -341,7 +340,7 @@ class PaymentPaginationIntegrationTest {
     @DisplayName("Scenario 24 & 25: Existing payment creation and idempotency replay behavior remain intact")
     void testExistingPaymentCreationAndReplayIntact() throws Exception {
         InitiatePaymentRequest req = new InitiatePaymentRequest(
-                "IDEM_INTEG_TEST_5", "USR_ALICE", new BigDecimal("150.00"), "USD", "CREDIT_CARD", "Step 5 regression check"
+                "IDEM_INTEG_TEST_5", "USR_ALICE", 15000L, "USD", "CREDIT_CARD", "Step 5 regression check"
         );
 
         // 1. First execution -> 201 Created without Idempotent-Replayed header

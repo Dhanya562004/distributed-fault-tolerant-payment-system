@@ -18,7 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -147,8 +146,8 @@ public class PostgreSqlConcurrencyStressTest extends AbstractPostgreSqlIntegrati
     private BenchmarkResult executeSinglePostgreSqlBenchmark(int runIndex, int totalRequests, int workerCount) throws Exception {
         String userCode = "USR_PG_BENCH_" + runIndex + "_" + System.nanoTime();
         String idempotencyKey = "IDEM_PG_BENCH_" + runIndex + "_" + System.nanoTime();
-        BigDecimal initialBalance = new BigDecimal("1000.0000");
-        BigDecimal paymentAmount = new BigDecimal("100.0000");
+        Long initialBalance = 100000L;
+        Long paymentAmount = 10000L;
 
         // 1. Prepare isolated user in PostgreSQL
         User testUser = new User(userCode, "PG Benchmark User " + runIndex, userCode + "@pg.bench", initialBalance);
@@ -291,7 +290,7 @@ public class PostgreSqlConcurrencyStressTest extends AbstractPostgreSqlIntegrati
         return res;
     }
 
-    private void validatePostgreSqlDatabaseCorrectness(String userCode, String idempotencyKey, BigDecimal initialBalance, BigDecimal paymentAmount) {
+    private void validatePostgreSqlDatabaseCorrectness(String userCode, String idempotencyKey, Long initialBalance, Long paymentAmount) {
         // Query payments table in PostgreSQL
         List<PaymentTransaction> transactions = paymentTransactionRepository.findAll().stream()
                 .filter(tx -> idempotencyKey.equals(tx.getIdempotencyKey()))
@@ -302,16 +301,16 @@ public class PostgreSqlConcurrencyStressTest extends AbstractPostgreSqlIntegrati
         PaymentTransaction tx = transactions.get(0);
         assertEquals(PaymentStatus.SUCCESS, tx.getStatus());
         assertEquals(userCode, tx.getUserId());
-        assertEquals(0, paymentAmount.compareTo(tx.getAmount()));
+        assertEquals(paymentAmount, tx.getAmount());
 
         // Query user in PostgreSQL: balance must be deducted exactly once
         User updatedUser = userRepository.findByUserCode(userCode)
                 .orElseThrow(() -> new AssertionError("User not found in PostgreSQL: " + userCode));
-        BigDecimal expectedBalance = initialBalance.subtract(paymentAmount);
+        Long expectedBalance = initialBalance - paymentAmount;
         assertEquals(
-                0,
-                expectedBalance.stripTrailingZeros().compareTo(updatedUser.getBalance().stripTrailingZeros()),
-                String.format("PostgreSQL user balance mismatch! Expected %s but found %s", expectedBalance, updatedUser.getBalance())
+                expectedBalance,
+                updatedUser.getBalance(),
+                String.format("PostgreSQL user balance mismatch! Expected %d but found %d", expectedBalance, updatedUser.getBalance())
         );
 
         // Query idempotency record in PostgreSQL

@@ -13,7 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -42,7 +41,7 @@ class IdempotencyServiceTest {
     @DisplayName("Should successfully acquire lock for new idempotency key")
     void testTryAcquire_NewKey_Success() {
         String key = "IDEM_KEY_1001";
-        InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", new BigDecimal("150.00"), "USD", "CREDIT_CARD", "Test");
+        InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", 15000L, "USD", "CREDIT_CARD", "Test");
 
         when(idempotencyKeyRepository.findByKeyValue(key)).thenReturn(Optional.empty());
         when(idempotencyKeyRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -57,7 +56,7 @@ class IdempotencyServiceTest {
     @DisplayName("Should throw DuplicateRequestException when request with same key is IN_PROGRESS")
     void testTryAcquire_InProgress_ThrowsException() {
         String key = "IDEM_KEY_1002";
-        InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", new BigDecimal("150.00"), "USD", "CREDIT_CARD", "Test");
+        InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", 15000L, "USD", "CREDIT_CARD", "Test");
 
         IdempotencyKeyRecord existing = new IdempotencyKeyRecord(key, idempotencyService.computePayloadHash(request));
         existing.setStatus(IdempotencyKeyRecord.Status.IN_PROGRESS);
@@ -75,7 +74,7 @@ class IdempotencyServiceTest {
     @DisplayName("Should return cached completed record on duplicate request")
     void testTryAcquire_Completed_ReturnsCachedRecord() {
         String key = "IDEM_KEY_1003";
-        InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", new BigDecimal("150.00"), "USD", "CREDIT_CARD", "Test");
+        InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", 15000L, "USD", "CREDIT_CARD", "Test");
 
         IdempotencyKeyRecord existing = new IdempotencyKeyRecord(key, idempotencyService.computePayloadHash(request));
         existing.setStatus(IdempotencyKeyRecord.Status.COMPLETED);
@@ -94,8 +93,8 @@ class IdempotencyServiceTest {
     @DisplayName("Should throw PayloadMismatchException when same key is used with different payload")
     void testTryAcquire_PayloadMismatch_ThrowsException() {
         String key = "IDEM_KEY_MISMATCH";
-        InitiatePaymentRequest originalRequest = new InitiatePaymentRequest(key, "USR_ALICE", new BigDecimal("150.00"), "USD", "CREDIT_CARD", "Test");
-        InitiatePaymentRequest conflictingRequest = new InitiatePaymentRequest(key, "USR_ALICE", new BigDecimal("999.00"), "USD", "CREDIT_CARD", "Test Conflicting Payload");
+        InitiatePaymentRequest originalRequest = new InitiatePaymentRequest(key, "USR_ALICE", 15000L, "USD", "CREDIT_CARD", "Test");
+        InitiatePaymentRequest conflictingRequest = new InitiatePaymentRequest(key, "USR_ALICE", 99900L, "USD", "CREDIT_CARD", "Test Conflicting Payload");
 
         String originalHash = idempotencyService.computePayloadHash(originalRequest);
 
@@ -116,7 +115,7 @@ class IdempotencyServiceTest {
     @DisplayName("Should atomically acquire expired key when updateIfExpired returns 1")
     void testTryAcquire_ExpiredKey_AtomicUpdate_Success() {
         String key = "IDEM_KEY_EXPIRED";
-        InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", new BigDecimal("200.00"), "USD", "CREDIT_CARD", "Reused expired key");
+        InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", 20000L, "USD", "CREDIT_CARD", "Reused expired key");
 
         IdempotencyKeyRecord expiredRecord = new IdempotencyKeyRecord(key, "old_hash");
         expiredRecord.setStatus(IdempotencyKeyRecord.Status.COMPLETED);
@@ -136,7 +135,7 @@ class IdempotencyServiceTest {
     @DisplayName("Should throw DuplicateRequestException when expired key update race is lost and key is IN_PROGRESS")
     void testTryAcquire_ExpiredKey_UpdateLost_ThrowsDuplicateException() {
         String key = "IDEM_KEY_EXPIRED_RACE";
-        InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", new BigDecimal("200.00"), "USD", "CREDIT_CARD", "Race on expired key");
+        InitiatePaymentRequest request = new InitiatePaymentRequest(key, "USR_ALICE", 20000L, "USD", "CREDIT_CARD", "Race on expired key");
         String hash = idempotencyService.computePayloadHash(request);
 
         IdempotencyKeyRecord expiredRecord = new IdempotencyKeyRecord(key, hash);

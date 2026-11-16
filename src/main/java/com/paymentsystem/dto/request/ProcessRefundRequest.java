@@ -1,9 +1,8 @@
 package com.paymentsystem.dto.request;
 
-import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import java.math.BigDecimal;
 
 public class ProcessRefundRequest {
 
@@ -14,15 +13,15 @@ public class ProcessRefundRequest {
     private String idempotencyKey;
 
     @NotNull(message = "Refund amount is required")
-    @DecimalMin(value = "0.01", message = "Refund amount must be greater than zero")
-    private BigDecimal amount;
+    @Min(value = 1, message = "Refund amount must be greater than zero")
+    private Long amount;
 
     private String reason;
 
     public ProcessRefundRequest() {
     }
 
-    public ProcessRefundRequest(String paymentId, String idempotencyKey, BigDecimal amount, String reason) {
+    public ProcessRefundRequest(String paymentId, String idempotencyKey, Long amount, String reason) {
         this.paymentId = paymentId;
         this.idempotencyKey = idempotencyKey;
         this.amount = amount;
@@ -45,11 +44,11 @@ public class ProcessRefundRequest {
         this.idempotencyKey = idempotencyKey;
     }
 
-    public BigDecimal getAmount() {
+    public Long getAmount() {
         return amount;
     }
 
-    public void setAmount(BigDecimal amount) {
+    public void setAmount(Long amount) {
         this.amount = amount;
     }
 

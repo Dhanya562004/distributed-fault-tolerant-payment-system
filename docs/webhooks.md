@@ -74,7 +74,7 @@ Every outgoing webhook request carries a JSON payload with a stable, unique `eve
     "paymentId": "PAY_39B89463436A4CA2",
     "idempotencyKey": "IDEM_CHECKOUT_9921",
     "userId": "USR_ALICE",
-    "amount": 250.00,
+    "amount": 25000,
     "currency": "USD",
     "status": "SUCCESS",
     "paymentMethod": "CREDIT_CARD",

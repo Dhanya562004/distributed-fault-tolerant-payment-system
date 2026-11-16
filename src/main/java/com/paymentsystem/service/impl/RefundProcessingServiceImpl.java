@@ -23,7 +23,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -93,12 +92,12 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
         }
 
         List<RefundTransaction> existingRefunds = refundRepository.findByPaymentId(request.getPaymentId());
-        BigDecimal totalAlreadyRefunded = existingRefunds.stream()
-                .map(RefundTransaction::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        long totalAlreadyRefunded = existingRefunds.stream()
+                .mapToLong(RefundTransaction::getAmount)
+                .sum();
 
-        BigDecimal newTotalRefunded = totalAlreadyRefunded.add(request.getAmount());
-        if (newTotalRefunded.compareTo(payment.getAmount()) > 0) {
+        long newTotalRefunded = totalAlreadyRefunded + request.getAmount();
+        if (newTotalRefunded > payment.getAmount()) {
             throw new InvalidTransactionStateException("Refund amount [" + request.getAmount() + "] plus previous refunds [" + totalAlreadyRefunded + "] exceeds original payment amount [" + payment.getAmount() + "].");
         }
 
@@ -121,7 +120,7 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
         Optional<User> userOpt = userRepository.findByUserCodeForUpdate(payment.getUserId())
                 .or(() -> userRepository.findByUserCode(payment.getUserId()));
         userOpt.ifPresent(user -> {
-            user.setBalance(user.getBalance().add(request.getAmount()));
+            user.setBalance(user.getBalance() + request.getAmount());
             userRepository.save(user);
         });
 

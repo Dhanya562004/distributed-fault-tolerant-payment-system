@@ -13,7 +13,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.math.BigDecimal;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -52,7 +51,7 @@ public class PostgreSqlPessimisticLockingTest extends AbstractPostgreSqlIntegrat
     @DisplayName("PostgreSQL Pessimistic Locking: findByUserCodeForUpdate blocks competing transaction until commit")
     void testUserPessimisticLocking_BlocksCompetingTransaction() throws Exception {
         String userCode = "USR_PESS_" + System.currentTimeMillis();
-        BigDecimal initialBalance = new BigDecimal("1000.0000");
+        Long initialBalance = 100000L;
 
         userRepository.saveAndFlush(new User(userCode, "Pessimistic Test User", userCode + "@pg.test", initialBalance));
 
@@ -62,7 +61,7 @@ public class PostgreSqlPessimisticLockingTest extends AbstractPostgreSqlIntegrat
         CountDownLatch allDone = new CountDownLatch(2);
 
         AtomicBoolean txBCompleted = new AtomicBoolean(false);
-        AtomicReference<BigDecimal> txBBalanceRead = new AtomicReference<>();
+        AtomicReference<Long> txBBalanceRead = new AtomicReference<>();
         AtomicReference<Throwable> errorRef = new AtomicReference<>();
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -84,7 +83,7 @@ public class PostgreSqlPessimisticLockingTest extends AbstractPostgreSqlIntegrat
                         Thread.currentThread().interrupt();
                     }
 
-                    userA.setBalance(new BigDecimal("900.0000"));
+                    userA.setBalance(90000L);
                     userRepository.saveAndFlush(userA);
                     return null;
                 });
@@ -108,7 +107,7 @@ public class PostgreSqlPessimisticLockingTest extends AbstractPostgreSqlIntegrat
                     // This call will BLOCK in PostgreSQL until Tx A commits!
                     User userB = userRepository.findByUserCodeForUpdate(userCode).orElseThrow();
                     txBBalanceRead.set(userB.getBalance());
-                    userB.setBalance(userB.getBalance().subtract(new BigDecimal("100.0000")));
+                    userB.setBalance(userB.getBalance() - 10000L);
                     userRepository.saveAndFlush(userB);
                     txBCompleted.set(true);
                     return null;
@@ -139,12 +138,12 @@ public class PostgreSqlPessimisticLockingTest extends AbstractPostgreSqlIntegrat
         assertTrue(txBCompleted.get(), "Transaction B must complete after Tx A commits and releases lock");
 
         // Verify Tx B observed Tx A's committed balance ($900.00), not the initial $1,000.00
-        assertEquals(0, new BigDecimal("900.0000").compareTo(txBBalanceRead.get()),
+        assertEquals(90000L, txBBalanceRead.get(),
                 "Tx B must read Tx A's committed balance ($900.00) after unblocking");
 
         // Verify final balance after both serialized deductions: 1000 - 100 - 100 = 800.00
         User finalUser = userRepository.findByUserCode(userCode).orElseThrow();
-        assertEquals(0, new BigDecimal("800.0000").compareTo(finalUser.getBalance()),
+        assertEquals(80000L, finalUser.getBalance(),
                 "Final balance must reflect both serialized updates ($800.00)");
     }
 
@@ -153,7 +152,7 @@ public class PostgreSqlPessimisticLockingTest extends AbstractPostgreSqlIntegrat
     void testPaymentTransactionPessimisticLocking() throws Exception {
         String paymentId = "PAY_PESS_" + UUID.randomUUID().toString().substring(0, 8);
         PaymentTransaction tx = new PaymentTransaction(
-                paymentId, "IDEM_PESS_TX", "USR_DUMMY", new BigDecimal("75.0000"), "USD", "CREDIT_CARD", "Pessimistic Tx Test"
+                paymentId, "IDEM_PESS_TX", "USR_DUMMY", 7500L, "USD", "CREDIT_CARD", "Pessimistic Tx Test"
         );
         paymentTransactionRepository.saveAndFlush(tx);
 

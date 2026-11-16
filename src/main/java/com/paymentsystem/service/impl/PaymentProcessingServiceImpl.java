@@ -31,7 +31,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -307,13 +306,13 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                 .or(() -> userRepository.findByUserCode(request.getUserId()));
         if (userOpt.isPresent()) {
             User user = userOpt.get();
-            if (user.getBalance().compareTo(request.getAmount()) < 0) {
+            if (user.getBalance() < request.getAmount()) {
                 throw new InsufficientBalanceException("Insufficient user account balance. Available: " + user.getBalance() + ", Requested: " + request.getAmount());
             }
-            user.setBalance(user.getBalance().subtract(request.getAmount()));
+            user.setBalance(user.getBalance() - request.getAmount());
             userRepository.save(user);
         } else {
-            User newUser = new User(request.getUserId(), "Customer " + request.getUserId(), request.getUserId() + "@example.com", new BigDecimal("10000.00").subtract(request.getAmount()));
+            User newUser = new User(request.getUserId(), "Customer " + request.getUserId(), request.getUserId() + "@example.com", 1000000L - request.getAmount());
             userRepository.save(newUser);
         }
 
