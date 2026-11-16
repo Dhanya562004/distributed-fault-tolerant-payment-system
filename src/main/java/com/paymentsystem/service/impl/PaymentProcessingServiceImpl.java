@@ -14,7 +14,9 @@ import com.paymentsystem.exception.ResourceNotFoundException;
 import com.paymentsystem.exception.RetryableException;
 import com.paymentsystem.repository.PaymentTransactionRepository;
 import com.paymentsystem.repository.UserRepository;
+import com.paymentsystem.security.RequestContext;
 import com.paymentsystem.service.AuditService;
+import org.slf4j.MDC;
 import com.paymentsystem.service.GatewaySimulationService;
 import com.paymentsystem.service.IdempotencyService;
 import com.paymentsystem.service.MetricsService;
@@ -161,6 +163,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
     }
 
     private PaymentResponse processAsyncPayment(InitiatePaymentRequest request, String paymentId) {
+        String requestId = RequestContext.getRequestId();
         PaymentTransaction tx = new PaymentTransaction(
                 paymentId,
                 request.getIdempotencyKey(),
@@ -170,6 +173,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                 request.getPaymentMethod(),
                 request.getDescription()
         );
+        tx.setRequestId(requestId);
         tx.setStatus(PaymentStatus.PROCESSING);
         paymentRepository.saveAndFlush(tx);
 
@@ -189,6 +193,8 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                 request.getPaymentMethod(),
                 request.getDescription()
         );
+        message.setRequestId(requestId);
+        message.setApiKey(RequestContext.getApiKey());
 
         queueManager.publish(request.getUserId(), message);
 
@@ -198,6 +204,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
     }
 
     private PaymentResponse processSyncPaymentWithRetries(InitiatePaymentRequest request, String paymentId, long startTime) {
+        String requestId = RequestContext.getRequestId();
         PaymentTransaction tx = new PaymentTransaction(
                 paymentId,
                 request.getIdempotencyKey(),
@@ -207,6 +214,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                 request.getPaymentMethod(),
                 request.getDescription()
         );
+        tx.setRequestId(requestId);
         tx.setStatus(PaymentStatus.PENDING);
         paymentRepository.saveAndFlush(tx);
 
@@ -321,67 +329,79 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
 
     @Override
     public boolean processWorkerMessage(EventMessage message, String workerId) {
-        logger.info("[WORKER {}] Processing event {} for payment {}", workerId, message.getEventId(), message.getPaymentId());
-        Optional<PaymentTransaction> txOpt = paymentRepository.findByPaymentIdForUpdate(message.getPaymentId())
-                .or(() -> paymentRepository.findByPaymentId(message.getPaymentId()));
-        if (txOpt.isEmpty()) {
-            logger.error("Worker could not find transaction record for paymentId: {}", message.getPaymentId());
-            return false;
+        if (message.getRequestId() != null) {
+            MDC.put("requestId", message.getRequestId());
+            RequestContext.setRequestId(message.getRequestId());
         }
-
-        PaymentTransaction tx = txOpt.get();
-        if (tx.getStatus() == PaymentStatus.SUCCESS || tx.getStatus() == PaymentStatus.FAILED) {
-            logger.info("Payment {} is already in terminal state {}, skipping worker duplicate execution", tx.getPaymentId(), tx.getStatus());
-            return true;
+        if (message.getApiKey() != null) {
+            RequestContext.setApiKey(message.getApiKey());
         }
-
-        InitiatePaymentRequest req = new InitiatePaymentRequest(
-                message.getIdempotencyKey(),
-                message.getUserId(),
-                message.getAmount(),
-                message.getCurrency(),
-                message.getPaymentMethod(),
-                message.getDescription()
-        );
-
         try {
-            runInTransaction(() -> executeSinglePaymentAttempt(tx, req));
-            if (paymentCoordinator != null) {
-                paymentCoordinator.commitPaymentSuccess(tx);
-            } else {
-                tx.setStatus(PaymentStatus.SUCCESS);
-                paymentRepository.saveAndFlush(tx);
+            logger.info("[WORKER {}] Processing event {} for payment {}", workerId, message.getEventId(), message.getPaymentId());
+            Optional<PaymentTransaction> txOpt = paymentRepository.findByPaymentIdForUpdate(message.getPaymentId())
+                    .or(() -> paymentRepository.findByPaymentId(message.getPaymentId()));
+            if (txOpt.isEmpty()) {
+                logger.error("Worker could not find transaction record for paymentId: {}", message.getPaymentId());
+                return false;
             }
-            metricsService.incrementSuccessfulTransactions();
 
-            auditService.recordAuditLog(
-                    tx.getPaymentId(), tx.getIdempotencyKey(), tx.getUserId(),
-                    "PROCESSING", "SUCCESS", "WORKER_PAYMENT_SUCCESS", workerId,
-                    "Payment authorized by worker pool", Map.of()
+            PaymentTransaction tx = txOpt.get();
+            if (tx.getStatus() == PaymentStatus.SUCCESS || tx.getStatus() == PaymentStatus.FAILED) {
+                logger.info("Payment {} is already in terminal state {}, skipping worker duplicate execution", tx.getPaymentId(), tx.getStatus());
+                return true;
+            }
+
+            InitiatePaymentRequest req = new InitiatePaymentRequest(
+                    message.getIdempotencyKey(),
+                    message.getUserId(),
+                    message.getAmount(),
+                    message.getCurrency(),
+                    message.getPaymentMethod(),
+                    message.getDescription()
             );
 
-            PaymentResponse response = mapToResponse(tx);
-            idempotencyService.markCompleted(tx.getIdempotencyKey(), response, 200);
-            return true;
+            try {
+                runInTransaction(() -> executeSinglePaymentAttempt(tx, req));
+                if (paymentCoordinator != null) {
+                    paymentCoordinator.commitPaymentSuccess(tx);
+                } else {
+                    tx.setStatus(PaymentStatus.SUCCESS);
+                    paymentRepository.saveAndFlush(tx);
+                }
+                metricsService.incrementSuccessfulTransactions();
 
-        } catch (PaymentProcessingException ex) {
-            logger.warn("[WORKER {}] Payment processing exception for {}: {}", workerId, tx.getPaymentId(), ex.getMessage());
-            if (paymentCoordinator != null) {
-                paymentCoordinator.commitPaymentFailure(tx, ex.getMessage());
-            } else {
-                tx.setFailureReason(ex.getMessage());
-                paymentRepository.saveAndFlush(tx);
+                auditService.recordAuditLog(
+                        tx.getPaymentId(), tx.getIdempotencyKey(), tx.getUserId(),
+                        "PROCESSING", "SUCCESS", "WORKER_PAYMENT_SUCCESS", workerId,
+                        "Payment authorized by worker pool", Map.of()
+                );
+
+                PaymentResponse response = mapToResponse(tx);
+                idempotencyService.markCompleted(message.getApiKey() != null ? message.getApiKey() : RequestContext.getApiKey(), tx.getIdempotencyKey(), response, 200);
+                return true;
+
+            } catch (PaymentProcessingException ex) {
+                logger.warn("[WORKER {}] Payment processing exception for {}: {}", workerId, tx.getPaymentId(), ex.getMessage());
+                if (paymentCoordinator != null) {
+                    paymentCoordinator.commitPaymentFailure(tx, ex.getMessage());
+                } else {
+                    tx.setFailureReason(ex.getMessage());
+                    paymentRepository.saveAndFlush(tx);
+                }
+                return false;
+            } catch (Exception ex) {
+                logger.error("[WORKER {}] Unexpected failure processing payment {}: {}", workerId, tx.getPaymentId(), ex.getMessage(), ex);
+                if (paymentCoordinator != null) {
+                    paymentCoordinator.commitPaymentFailure(tx, ex.getMessage());
+                } else {
+                    tx.setFailureReason(ex.getMessage());
+                    paymentRepository.saveAndFlush(tx);
+                }
+                return false;
             }
-            return false;
-        } catch (Exception ex) {
-            logger.error("[WORKER {}] Unexpected failure processing payment {}: {}", workerId, tx.getPaymentId(), ex.getMessage(), ex);
-            if (paymentCoordinator != null) {
-                paymentCoordinator.commitPaymentFailure(tx, ex.getMessage());
-            } else {
-                tx.setFailureReason(ex.getMessage());
-                paymentRepository.saveAndFlush(tx);
-            }
-            return false;
+        } finally {
+            MDC.remove("requestId");
+            RequestContext.clear();
         }
     }
 
@@ -399,14 +419,26 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
 
     @Override
     public List<PaymentResponse> getAllPayments(int page, int size) {
+        return getAllPaymentsPaged(page, size).getData();
+    }
+
+    @Override
+    public com.paymentsystem.dto.response.PagedResponse<PaymentResponse> getAllPaymentsPaged(int page, int size) {
         int safePage = Math.max(0, page);
         int safeSize = (size <= 0 || size > 100) ? 20 : size;
-        return paymentRepository.findAll().stream()
+        List<PaymentTransaction> all = paymentRepository.findAll().stream()
                 .sorted(Comparator.comparing(PaymentTransaction::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-                .skip((long) safePage * safeSize)
-                .limit(safeSize)
+                .collect(Collectors.toList());
+        int total = all.size();
+        int fromIndex = Math.min(safePage * safeSize, total);
+        int toIndex = Math.min(fromIndex + safeSize, total);
+        List<PaymentResponse> items = all.subList(fromIndex, toIndex).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
+        boolean hasMore = toIndex < total;
+        String nextCursor = hasMore ? String.valueOf(safePage + 1) : null;
+        com.paymentsystem.dto.response.PaginationMetadata meta = new com.paymentsystem.dto.response.PaginationMetadata(safeSize, hasMore, nextCursor, safePage, (long) total);
+        return new com.paymentsystem.dto.response.PagedResponse<>(items, meta);
     }
 
     @Override
@@ -416,20 +448,33 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
 
     @Override
     public List<PaymentResponse> getPaymentsByUser(String userId, int page, int size) {
+        return getPaymentsByUserPaged(userId, page, size).getData();
+    }
+
+    @Override
+    public com.paymentsystem.dto.response.PagedResponse<PaymentResponse> getPaymentsByUserPaged(String userId, int page, int size) {
         int safePage = Math.max(0, page);
         int safeSize = (size <= 0 || size > 100) ? 20 : size;
-        return paymentRepository.findByUserId(userId).stream()
+        List<PaymentTransaction> all = paymentRepository.findByUserId(userId).stream()
                 .sorted(Comparator.comparing(PaymentTransaction::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-                .skip((long) safePage * safeSize)
-                .limit(safeSize)
+                .collect(Collectors.toList());
+        int total = all.size();
+        int fromIndex = Math.min(safePage * safeSize, total);
+        int toIndex = Math.min(fromIndex + safeSize, total);
+        List<PaymentResponse> items = all.subList(fromIndex, toIndex).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
+        boolean hasMore = toIndex < total;
+        String nextCursor = hasMore ? String.valueOf(safePage + 1) : null;
+        com.paymentsystem.dto.response.PaginationMetadata meta = new com.paymentsystem.dto.response.PaginationMetadata(safeSize, hasMore, nextCursor, safePage, (long) total);
+        return new com.paymentsystem.dto.response.PagedResponse<>(items, meta);
     }
 
     @Override
     public PaymentResponse mapToResponse(PaymentTransaction tx) {
         PaymentResponse response = new PaymentResponse();
         response.setPaymentId(tx.getPaymentId());
+        response.setRequestId(tx.getRequestId() != null ? tx.getRequestId() : RequestContext.getRequestId());
         response.setIdempotencyKey(tx.getIdempotencyKey());
         response.setUserId(tx.getUserId());
         response.setAmount(tx.getAmount());

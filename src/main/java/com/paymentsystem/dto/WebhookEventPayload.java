@@ -15,16 +15,22 @@ public class WebhookEventPayload {
     private String eventType;
     private String aggregateId;
     private Instant timestamp;
+    private String requestId;
     private Map<String, Object> data;
 
     public WebhookEventPayload() {
     }
 
     public WebhookEventPayload(String eventId, String eventType, String aggregateId, Instant timestamp, Map<String, Object> data) {
+        this(eventId, eventType, aggregateId, timestamp, null, data);
+    }
+
+    public WebhookEventPayload(String eventId, String eventType, String aggregateId, Instant timestamp, String requestId, Map<String, Object> data) {
         this.eventId = eventId;
         this.eventType = eventType;
         this.aggregateId = aggregateId;
         this.timestamp = timestamp;
+        this.requestId = requestId;
         this.data = data;
     }
 
@@ -58,6 +64,14 @@ public class WebhookEventPayload {
 
     public void setTimestamp(Instant timestamp) {
         this.timestamp = timestamp;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
     }
 
     public Map<String, Object> getData() {

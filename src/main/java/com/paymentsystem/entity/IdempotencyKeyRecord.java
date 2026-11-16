@@ -5,7 +5,8 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "idempotency_keys", indexes = {
-        @Index(name = "idx_key_value", columnList = "key_value", unique = true)
+        @Index(name = "idx_idempotency_api_key_value", columnList = "api_key, key_value", unique = true),
+        @Index(name = "idx_key_value", columnList = "key_value")
 })
 public class IdempotencyKeyRecord {
 
@@ -19,7 +20,10 @@ public class IdempotencyKeyRecord {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "key_value", nullable = false, unique = true, length = 128)
+    @Column(name = "api_key", nullable = false, length = 128)
+    private String apiKey = "default";
+
+    @Column(name = "key_value", nullable = false, length = 128)
     private String keyValue;
 
     @Column(name = "request_hash", nullable = false, length = 64)
@@ -48,16 +52,29 @@ public class IdempotencyKeyRecord {
     }
 
     public IdempotencyKeyRecord(String keyValue, String requestHash) {
-        this(keyValue, requestHash, Instant.now(), Instant.now().plus(24, java.time.temporal.ChronoUnit.HOURS));
+        this("default", keyValue, requestHash, Instant.now(), Instant.now().plus(24, java.time.temporal.ChronoUnit.HOURS));
     }
 
     public IdempotencyKeyRecord(String keyValue, String requestHash, Instant createdAt, Instant expiresAt) {
+        this("default", keyValue, requestHash, createdAt, expiresAt);
+    }
+
+    public IdempotencyKeyRecord(String apiKey, String keyValue, String requestHash, Instant createdAt, Instant expiresAt) {
+        this.apiKey = (apiKey != null && !apiKey.trim().isEmpty()) ? apiKey.trim() : "default";
         this.keyValue = keyValue;
         this.requestHash = requestHash;
         this.status = Status.IN_PROGRESS;
         this.createdAt = createdAt;
         this.updatedAt = createdAt;
         this.expiresAt = expiresAt;
+    }
+
+    public String getApiKey() {
+        return apiKey;
+    }
+
+    public void setApiKey(String apiKey) {
+        this.apiKey = (apiKey != null && !apiKey.trim().isEmpty()) ? apiKey.trim() : "default";
     }
 
     @PrePersist

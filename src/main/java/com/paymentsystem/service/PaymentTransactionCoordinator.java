@@ -9,6 +9,7 @@ import com.paymentsystem.entity.PaymentTransaction;
 import com.paymentsystem.entity.RefundTransaction;
 import com.paymentsystem.repository.OutboxEventRepository;
 import com.paymentsystem.repository.PaymentTransactionRepository;
+import com.paymentsystem.security.RequestContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -126,6 +127,7 @@ public class PaymentTransactionCoordinator {
 
     private OutboxEvent buildPaymentOutboxEvent(String eventType, PaymentTransaction tx, int maxAttempts, Instant now) {
         String eventId = "evt_" + UUID.randomUUID().toString().replace("-", "");
+        String requestId = tx.getRequestId() != null ? tx.getRequestId() : RequestContext.getRequestId();
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("paymentId", tx.getPaymentId());
@@ -138,16 +140,20 @@ public class PaymentTransactionCoordinator {
         data.put("description", tx.getDescription());
         data.put("failureReason", tx.getFailureReason());
         data.put("retryCount", tx.getRetryCount());
+        data.put("requestId", requestId);
         data.put("createdAt", tx.getCreatedAt() != null ? tx.getCreatedAt().toString() : now.toString());
 
-        WebhookEventPayload payloadObj = new WebhookEventPayload(eventId, eventType, tx.getPaymentId(), now, data);
+        WebhookEventPayload payloadObj = new WebhookEventPayload(eventId, eventType, tx.getPaymentId(), now, requestId, data);
         String payloadJson = serializePayload(payloadObj);
 
-        return new OutboxEvent(eventId, eventType, tx.getPaymentId(), payloadJson, maxAttempts, now);
+        OutboxEvent event = new OutboxEvent(eventId, eventType, tx.getPaymentId(), payloadJson, maxAttempts, now);
+        event.setRequestId(requestId);
+        return event;
     }
 
     private OutboxEvent buildRefundOutboxEvent(String eventType, RefundTransaction refund, int maxAttempts, Instant now) {
         String eventId = "evt_" + UUID.randomUUID().toString().replace("-", "");
+        String requestId = RequestContext.getRequestId();
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("refundId", refund.getRefundId());
@@ -156,12 +162,15 @@ public class PaymentTransactionCoordinator {
         data.put("amount", refund.getAmount());
         data.put("status", refund.getStatus() != null ? refund.getStatus().name() : null);
         data.put("reason", refund.getReason());
+        data.put("requestId", requestId);
         data.put("createdAt", refund.getCreatedAt() != null ? refund.getCreatedAt().toString() : now.toString());
 
-        WebhookEventPayload payloadObj = new WebhookEventPayload(eventId, eventType, refund.getRefundId(), now, data);
+        WebhookEventPayload payloadObj = new WebhookEventPayload(eventId, eventType, refund.getRefundId(), now, requestId, data);
         String payloadJson = serializePayload(payloadObj);
 
-        return new OutboxEvent(eventId, eventType, refund.getRefundId(), payloadJson, maxAttempts, now);
+        OutboxEvent event = new OutboxEvent(eventId, eventType, refund.getRefundId(), payloadJson, maxAttempts, now);
+        event.setRequestId(requestId);
+        return event;
     }
 
     private String serializePayload(WebhookEventPayload payload) {

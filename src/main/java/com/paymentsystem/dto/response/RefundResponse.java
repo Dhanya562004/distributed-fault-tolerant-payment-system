@@ -13,6 +13,7 @@ public class RefundResponse {
     private PaymentStatus status;
     private String reason;
     private Instant createdAt;
+    private String requestId;
 
     public RefundResponse() {
     }
@@ -81,5 +82,13 @@ public class RefundResponse {
 
     public void setIsCachedIdempotentResponse(Boolean isCachedIdempotentResponse) {
         this.isCachedIdempotentResponse = isCachedIdempotentResponse;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
     }
 }

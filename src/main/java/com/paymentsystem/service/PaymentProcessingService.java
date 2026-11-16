@@ -6,6 +6,7 @@ import com.paymentsystem.entity.PaymentTransaction;
 import com.paymentsystem.worker.EventMessage;
 
 import java.util.List;
+import com.paymentsystem.dto.response.PagedResponse;
 
 public interface PaymentProcessingService {
     PaymentResponse initiatePayment(InitiatePaymentRequest request);
@@ -14,8 +15,10 @@ public interface PaymentProcessingService {
     PaymentResponse getPaymentStatus(String paymentId);
     List<PaymentResponse> getAllPayments();
     List<PaymentResponse> getAllPayments(int page, int size);
+    PagedResponse<PaymentResponse> getAllPaymentsPaged(int page, int size);
     List<PaymentResponse> getPaymentsByUser(String userId);
     List<PaymentResponse> getPaymentsByUser(String userId, int page, int size);
+    PagedResponse<PaymentResponse> getPaymentsByUserPaged(String userId, int page, int size);
     PaymentResponse mapToResponse(PaymentTransaction tx);
     com.paymentsystem.dto.response.PagedPaymentResponse getTransactions(
             Integer limit, String cursor, String status, String from, String to,

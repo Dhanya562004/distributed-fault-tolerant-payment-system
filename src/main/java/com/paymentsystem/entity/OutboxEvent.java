@@ -43,6 +43,9 @@ public class OutboxEvent {
     @Column(name = "max_attempts", nullable = false)
     private int maxAttempts = 5;
 
+    @Column(name = "request_id", length = 64)
+    private String requestId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -198,6 +201,14 @@ public class OutboxEvent {
 
     public void setLeaseOwner(String leaseOwner) {
         this.leaseOwner = leaseOwner;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
     }
 
     @Override

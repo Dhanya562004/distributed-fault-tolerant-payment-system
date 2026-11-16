@@ -1,6 +1,7 @@
 package com.paymentsystem.controller;
 
 import com.paymentsystem.dto.request.CreateUserRequest;
+import com.paymentsystem.dto.response.PagedResponse;
 import com.paymentsystem.dto.response.UserResponse;
 import com.paymentsystem.entity.User;
 import com.paymentsystem.exception.ResourceNotFoundException;
@@ -37,12 +38,14 @@ public class UserController {
     }
 
     @GetMapping
-    @Operation(summary = "List All Users", description = "Retrieves all registered user accounts")
-    public ResponseEntity<List<UserResponse>> getAllUsers() {
+    @Operation(summary = "List All Users", description = "Retrieves all registered user accounts with pagination support")
+    public ResponseEntity<PagedResponse<UserResponse>> getAllUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         List<UserResponse> users = userRepository.findAll().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
-        return ResponseEntity.ok(users);
+        return ResponseEntity.ok(PagedResponse.paginate(users, page, size));
     }
 
     @GetMapping("/{userCode}")

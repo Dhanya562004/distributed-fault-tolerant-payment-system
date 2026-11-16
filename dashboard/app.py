@@ -466,12 +466,18 @@ def get_standalone_metrics():
         "statusBreakdown": status_map
     }
 
+DEFAULT_ADMIN_API_KEY = "apexpay_admin_secret_key_2026"
+
 def api_get(endpoint):
     if is_live_backend:
         try:
-            resp = http_session.get(f"{active_backend_url}{endpoint}", timeout=10)
+            req_headers = {"X-Api-Key": DEFAULT_ADMIN_API_KEY}
+            resp = http_session.get(f"{active_backend_url}{endpoint}", headers=req_headers, timeout=10)
             if resp.status_code == 200:
-                return resp.json()
+                data = resp.json()
+                if isinstance(data, dict) and "data" in data and "pagination" in data:
+                    return data["data"]
+                return data
         except Exception:
             pass
         # Do not return mock simulated datasets when connected to live backend
@@ -499,7 +505,10 @@ def api_get(endpoint):
 def api_post(endpoint, payload, headers=None):
     if is_live_backend:
         try:
-            resp = http_session.post(f"{active_backend_url}{endpoint}", json=payload, headers=headers or {}, timeout=15)
+            post_headers = {"X-Api-Key": DEFAULT_ADMIN_API_KEY}
+            if headers:
+                post_headers.update(headers)
+            resp = http_session.post(f"{active_backend_url}{endpoint}", json=payload, headers=post_headers, timeout=15)
             if resp.content:
                 try:
                     return resp.status_code, resp.json()

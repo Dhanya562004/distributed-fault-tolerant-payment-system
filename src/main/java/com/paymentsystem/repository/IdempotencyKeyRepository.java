@@ -17,9 +17,24 @@ public interface IdempotencyKeyRepository extends JpaRepository<IdempotencyKeyRe
 
     Optional<IdempotencyKeyRecord> findByKeyValue(String keyValue);
 
+    Optional<IdempotencyKeyRecord> findByApiKeyAndKeyValue(String apiKey, String keyValue);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM IdempotencyKeyRecord i WHERE i.apiKey = :apiKey AND i.keyValue = :keyValue")
+    Optional<IdempotencyKeyRecord> findByApiKeyAndKeyValueForUpdate(@Param("apiKey") String apiKey, @Param("keyValue") String keyValue);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM IdempotencyKeyRecord i WHERE i.keyValue = :keyValue")
     Optional<IdempotencyKeyRecord> findByKeyValueForUpdate(@Param("keyValue") String keyValue);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE IdempotencyKeyRecord i SET i.status = :newStatus, i.requestHash = :requestHash, i.responseBody = NULL, i.httpStatusCode = NULL, i.createdAt = :now, i.updatedAt = :now, i.expiresAt = :newExpiresAt WHERE i.apiKey = :apiKey AND i.keyValue = :keyValue AND i.expiresAt <= :now")
+    int updateIfExpiredScoped(@Param("apiKey") String apiKey,
+                              @Param("keyValue") String keyValue,
+                              @Param("requestHash") String requestHash,
+                              @Param("now") Instant now,
+                              @Param("newExpiresAt") Instant newExpiresAt,
+                              @Param("newStatus") IdempotencyKeyRecord.Status newStatus);
 
     @Modifying(clearAutomatically = true)
     @Query("UPDATE IdempotencyKeyRecord i SET i.status = :newStatus, i.requestHash = :requestHash, i.responseBody = NULL, i.httpStatusCode = NULL, i.createdAt = :now, i.updatedAt = :now, i.expiresAt = :newExpiresAt WHERE i.keyValue = :keyValue AND i.expiresAt <= :now")

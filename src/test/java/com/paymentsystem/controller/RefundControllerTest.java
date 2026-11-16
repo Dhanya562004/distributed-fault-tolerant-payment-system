@@ -158,4 +158,22 @@ class RefundControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.refundId").value("REF_2001"));
     }
+
+    @Test
+    @DisplayName("GET /api/v1/refunds/payment/{paymentId} should return paginated refund list")
+    void testGetRefundsForPayment_Paginated() throws Exception {
+        RefundResponse response = new RefundResponse();
+        response.setRefundId("REF_2001");
+        response.setPaymentId("PAY_2001");
+        response.setStatus(PaymentStatus.REFUNDED);
+
+        when(refundProcessingService.getRefundsForPayment("PAY_2001")).thenReturn(List.of(response));
+
+        mockMvc.perform(get("/api/v1/refunds/payment/PAY_2001?page=0&size=10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].refundId").value("REF_2001"))
+                .andExpect(jsonPath("$.pagination.limit").value(10))
+                .andExpect(jsonPath("$.pagination.hasMore").value(false));
+    }
 }

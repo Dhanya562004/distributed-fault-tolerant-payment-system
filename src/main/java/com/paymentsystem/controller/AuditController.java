@@ -1,6 +1,7 @@
 package com.paymentsystem.controller;
 
 import com.paymentsystem.dto.response.AuditLogResponse;
+import com.paymentsystem.dto.response.PagedResponse;
 import com.paymentsystem.service.AuditService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,14 +24,19 @@ public class AuditController {
     }
 
     @GetMapping("/logs")
-    @Operation(summary = "Get All Audit Logs", description = "Fetches recent state change audit documents")
-    public ResponseEntity<List<AuditLogResponse>> getAllLogs() {
-        return ResponseEntity.ok(auditService.getAllLogs());
+    @Operation(summary = "Get All Audit Logs", description = "Fetches recent state change audit documents with pagination support")
+    public ResponseEntity<PagedResponse<AuditLogResponse>> getAllLogs(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        return ResponseEntity.ok(PagedResponse.paginate(auditService.getAllLogs(), page, size));
     }
 
     @GetMapping("/payments/{paymentId}")
-    @Operation(summary = "Get Payment Audit Logs", description = "Fetches complete state transition audit timeline for specific payment")
-    public ResponseEntity<List<AuditLogResponse>> getLogsForPayment(@PathVariable String paymentId) {
-        return ResponseEntity.ok(auditService.getLogsForPayment(paymentId));
+    @Operation(summary = "Get Payment Audit Logs", description = "Fetches complete state transition audit timeline for specific payment with pagination support")
+    public ResponseEntity<PagedResponse<AuditLogResponse>> getLogsForPayment(
+            @PathVariable String paymentId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        return ResponseEntity.ok(PagedResponse.paginate(auditService.getLogsForPayment(paymentId), page, size));
     }
 }

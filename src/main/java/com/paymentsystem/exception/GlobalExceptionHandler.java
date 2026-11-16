@@ -1,6 +1,7 @@
 package com.paymentsystem.exception;
 
 import com.paymentsystem.dto.response.ErrorResponse;
+import com.paymentsystem.security.RequestContext;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +24,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNoResourceFound(NoResourceFoundException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.warn("[Trace: {}] No static resource or route found for path: {}", traceId, request.getRequestURI());
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.NOT_FOUND.value(),
@@ -38,7 +39,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleResourceNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.warn("[Trace: {}] Resource not found: {}", traceId, ex.getMessage());
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.NOT_FOUND.value(),
@@ -53,7 +54,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(PayloadMismatchException.class)
     public ResponseEntity<ErrorResponse> handlePayloadMismatch(PayloadMismatchException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.warn("[Trace: {}] Idempotency key payload mismatch: {}", traceId, ex.getMessage());
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.CONFLICT.value(),
@@ -68,7 +69,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InsufficientBalanceException.class)
     public ResponseEntity<ErrorResponse> handleInsufficientBalance(InsufficientBalanceException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.warn("[Trace: {}] Insufficient user balance: {}", traceId, ex.getMessage());
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.UNPROCESSABLE_ENTITY.value(),
@@ -83,7 +84,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DuplicateRequestException.class)
     public ResponseEntity<ErrorResponse> handleDuplicateRequest(DuplicateRequestException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.warn("[Trace: {}] Duplicate request conflict: {}", traceId, ex.getMessage());
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.CONFLICT.value(),
@@ -98,7 +99,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidTransactionStateException.class)
     public ResponseEntity<ErrorResponse> handleInvalidState(InvalidTransactionStateException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.warn("[Trace: {}] Invalid state transition: {}", traceId, ex.getMessage());
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.UNPROCESSABLE_ENTITY.value(),
@@ -113,7 +114,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<ErrorResponse> handleOptimisticLocking(OptimisticLockingFailureException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.error("[Trace: {}] Optimistic locking failure (concurrent modification): {}", traceId, ex.getMessage());
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.CONFLICT.value(),
@@ -128,7 +129,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(org.springframework.http.converter.HttpMessageNotReadableException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.warn("[Trace: {}] Malformed JSON request body: {}", traceId, ex.getMessage());
 
         ErrorResponse response = new ErrorResponse(
@@ -144,7 +145,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationErrors(MethodArgumentNotValidException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         List<String> details = ex.getBindingResult().getFieldErrors().stream()
                 .map(err -> err.getField() + ": " + err.getDefaultMessage())
                 .collect(Collectors.toList());
@@ -163,7 +164,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidCursorException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCursor(InvalidCursorException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.warn("[Trace: {}] Invalid pagination cursor: {}", traceId, ex.getMessage());
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
@@ -178,7 +179,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidPaginationFilterException.class)
     public ResponseEntity<ErrorResponse> handleInvalidPaginationFilter(InvalidPaginationFilterException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.warn("[Trace: {}] Invalid pagination filter: {}", traceId, ex.getMessage());
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
@@ -193,7 +194,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleMethodArgumentTypeMismatch(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.warn("[Trace: {}] Method argument type mismatch on parameter '{}': {}", traceId, ex.getName(), ex.getMessage());
         String paramType = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "valid type";
         ErrorResponse response = new ErrorResponse(
@@ -209,7 +210,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<ErrorResponse> handleUnauthorized(UnauthorizedException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.warn("[Trace: {}] Unauthorized request: {}", traceId, ex.getMessage());
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.UNAUTHORIZED.value(),
@@ -224,7 +225,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ForbiddenException.class)
     public ResponseEntity<ErrorResponse> handleForbidden(ForbiddenException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.warn("[Trace: {}] Forbidden request: {}", traceId, ex.getMessage());
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.FORBIDDEN.value(),
@@ -239,7 +240,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(PaymentProcessingException.class)
     public ResponseEntity<ErrorResponse> handlePaymentProcessingError(PaymentProcessingException ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.error("[Trace: {}] Payment processing exception: {}", traceId, ex.getMessage(), ex);
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
@@ -254,7 +255,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex, HttpServletRequest request) {
-        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        String traceId = resolveRequestId(request);
         logger.error("[Trace: {}] Unhandled server error: {}", traceId, ex.getMessage(), ex);
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
@@ -265,5 +266,19 @@ public class GlobalExceptionHandler {
                 List.of()
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+    }
+
+    private String resolveRequestId(HttpServletRequest request) {
+        String reqId = RequestContext.getRequestId();
+        if (reqId == null || reqId.trim().isEmpty()) {
+            reqId = request.getHeader("X-Request-Id");
+        }
+        if (reqId == null || reqId.trim().isEmpty()) {
+            reqId = request.getHeader("X-Request-ID");
+        }
+        if (reqId == null || reqId.trim().isEmpty()) {
+            reqId = "req_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        }
+        return reqId;
     }
 }

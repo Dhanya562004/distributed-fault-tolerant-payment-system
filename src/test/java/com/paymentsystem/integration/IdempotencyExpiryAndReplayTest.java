@@ -85,6 +85,7 @@ public class IdempotencyExpiryAndReplayTest {
     private AuditService auditService;
 
     private static final Instant BASE_TIME = Instant.parse("2026-10-18T10:00:00Z");
+    private static final String API_KEY = "apexpay_admin_secret_key_2026";
 
     @BeforeEach
     void resetClockAndState() {
@@ -95,6 +96,7 @@ public class IdempotencyExpiryAndReplayTest {
         String userCode = "USR_TTL_" + System.nanoTime();
         CreateUserRequest userReq = new CreateUserRequest(userCode, "TTL Test User", userCode.toLowerCase() + "@test.com", initialBalance);
         mockMvc.perform(post("/api/v1/users")
+                        .header("X-Api-Key", API_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(userReq)))
                 .andExpect(status().isCreated());
@@ -112,6 +114,7 @@ public class IdempotencyExpiryAndReplayTest {
         );
 
         MvcResult result = mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
@@ -144,6 +147,7 @@ public class IdempotencyExpiryAndReplayTest {
 
         // 1. Initial execution at T0
         MvcResult firstResult = mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
@@ -157,6 +161,7 @@ public class IdempotencyExpiryAndReplayTest {
 
         // 3. Repeat request with same key & payload -> replays exact response
         MvcResult replayResult = mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
@@ -185,6 +190,7 @@ public class IdempotencyExpiryAndReplayTest {
 
         // Initial execution
         mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
@@ -195,6 +201,7 @@ public class IdempotencyExpiryAndReplayTest {
 
         // Cached replay must include Idempotent-Replayed: true
         mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
@@ -215,6 +222,7 @@ public class IdempotencyExpiryAndReplayTest {
 
         // Fresh payment must NOT return Idempotent-Replayed header
         mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
@@ -234,6 +242,7 @@ public class IdempotencyExpiryAndReplayTest {
         );
 
         mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(originalReq)))
@@ -248,6 +257,7 @@ public class IdempotencyExpiryAndReplayTest {
         );
 
         mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(tamperedReq)))
@@ -271,6 +281,7 @@ public class IdempotencyExpiryAndReplayTest {
         );
 
         mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
@@ -279,6 +290,7 @@ public class IdempotencyExpiryAndReplayTest {
         // At T0 + 23h 59m 59s: key is NOT expired -> returns cached replay
         clock.setInstant(BASE_TIME.plus(Duration.ofHours(24)).minusSeconds(1));
         mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
@@ -303,6 +315,7 @@ public class IdempotencyExpiryAndReplayTest {
         );
 
         MvcResult firstResult = mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(firstReq)))
@@ -320,6 +333,7 @@ public class IdempotencyExpiryAndReplayTest {
         );
 
         MvcResult secondResult = mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(secondReq)))
@@ -340,6 +354,7 @@ public class IdempotencyExpiryAndReplayTest {
         // Within 1 hour of the second payment (Day 2 + 1h), replay returns second payment
         clock.advance(Duration.ofHours(1));
         mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(secondReq)))
@@ -478,6 +493,7 @@ public class IdempotencyExpiryAndReplayTest {
         );
 
         MvcResult firstRefResult = mockMvc.perform(post("/api/v1/refunds")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", refKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(refReq)))
@@ -489,6 +505,7 @@ public class IdempotencyExpiryAndReplayTest {
 
         // 3. Duplicate refund request within retention window
         mockMvc.perform(post("/api/v1/refunds")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", refKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(refReq)))
@@ -511,14 +528,15 @@ public class IdempotencyExpiryAndReplayTest {
                 key, userCode, 10000L, "USD", "CREDIT_CARD", "In progress test"
         );
 
-        // Simulate an in-progress idempotency key record in database
+        // Simulate an in-progress idempotency key record in database for this customer's API key
         String hash = idempotencyService.computePayloadHash(req);
-        IdempotencyKeyRecord inProgressRecord = new IdempotencyKeyRecord(key, hash, clock.instant(), clock.instant().plus(Duration.ofHours(24)));
+        IdempotencyKeyRecord inProgressRecord = new IdempotencyKeyRecord(API_KEY, key, hash, clock.instant(), clock.instant().plus(Duration.ofHours(24)));
         inProgressRecord.setStatus(IdempotencyKeyRecord.Status.IN_PROGRESS);
         idempotencyKeyRepository.saveAndFlush(inProgressRecord);
 
         // Attempting to post the request while IN_PROGRESS must return HTTP 409 Conflict without Idempotent-Replayed header
         mockMvc.perform(post("/api/v1/payments")
+                        .header("X-Api-Key", API_KEY)
                         .header("X-Idempotency-Key", key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
