@@ -91,6 +91,23 @@ class RefundControllerTest {
     }
 
     @Test
+    @DisplayName("POST /api/v1/refunds should return 422 UNPROCESSABLE_ENTITY on CumulativeRefundLimitExceededException")
+    void testProcessRefund_CumulativeLimitExceeded_ReturnsUnprocessableEntity() throws Exception {
+        ProcessRefundRequest request = new ProcessRefundRequest(
+                "PAY_1002", "IDEM_REF_LIMIT", 5000L, "Exceeds remaining"
+        );
+
+        when(refundProcessingService.processRefund(any(ProcessRefundRequest.class)))
+                .thenThrow(new com.paymentsystem.exception.CumulativeRefundLimitExceededException("Cumulative limit exceeded"));
+
+        mockMvc.perform(post("/api/v1/refunds")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.error").value("CUMULATIVE_REFUND_LIMIT_EXCEEDED"));
+    }
+
+    @Test
     @DisplayName("POST /api/v1/refunds should include Idempotent-Replayed: true header when refund response is cached")
     void testProcessRefund_CachedReplay_ReturnsIdempotentReplayedHeader() throws Exception {
         ProcessRefundRequest request = new ProcessRefundRequest(

@@ -200,7 +200,8 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
         txA.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         txA.execute(status -> {
             PaymentTransaction p = paymentTransactionRepository.findByPaymentId(paymentId).orElseThrow();
-            p.setStatus(PaymentStatus.SUCCESS);
+            p.transitionTo(PaymentStatus.PROCESSING);
+            p.transitionTo(PaymentStatus.SUCCESS);
             paymentTransactionRepository.saveAndFlush(p);
             return null;
         });
@@ -213,7 +214,7 @@ public class PostgreSqlOptimisticLockingTest extends AbstractPostgreSqlIntegrati
         TransactionTemplate txB = new TransactionTemplate(transactionManager);
         txB.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
-        savedTx.setStatus(PaymentStatus.FAILED); // Stale reference
+        savedTx.transitionTo(PaymentStatus.FAILED); // Stale reference
         assertThrows(OptimisticLockingFailureException.class, () -> {
             txB.execute(status -> {
                 paymentTransactionRepository.saveAndFlush(savedTx);

@@ -102,7 +102,7 @@ public class PostgreSqlTransactionalOutboxIntegrationTest extends AbstractPostgr
             txTemplate.executeWithoutResult(status -> {
                 PaymentTransaction tx = new PaymentTransaction(paymentId, "IDEM_" + paymentId, "USR_BOB",
                         50000L, "USD", "CREDIT_CARD", "Rollback Test");
-                tx.setStatus(PaymentStatus.SUCCESS);
+                com.paymentsystem.test.PaymentTestHelper.walkToState(tx, PaymentStatus.SUCCESS);
                 paymentRepository.saveAndFlush(tx);
 
                 OutboxEvent event = new OutboxEvent("evt_rb_" + paymentId, "payment.succeeded", paymentId, "{}", 5, Instant.now());

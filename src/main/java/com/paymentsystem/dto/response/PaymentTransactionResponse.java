@@ -19,6 +19,8 @@ public class PaymentTransactionResponse {
     private PaymentStatus status;
     private String paymentMethod;
     private String description;
+    private Long refundedAmount = 0L;
+    private Long remainingRefundable = 0L;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -28,6 +30,13 @@ public class PaymentTransactionResponse {
     public PaymentTransactionResponse(String id, String paymentId, String userId, Long amount,
                                       String currency, PaymentStatus status, String paymentMethod,
                                       String description, Instant createdAt, Instant updatedAt) {
+        this(id, paymentId, userId, amount, currency, status, paymentMethod, description, 0L, amount, createdAt, updatedAt);
+    }
+
+    public PaymentTransactionResponse(String id, String paymentId, String userId, Long amount,
+                                      String currency, PaymentStatus status, String paymentMethod,
+                                      String description, Long refundedAmount, Long remainingRefundable,
+                                      Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.paymentId = paymentId;
         this.userId = userId;
@@ -36,6 +45,8 @@ public class PaymentTransactionResponse {
         this.status = status;
         this.paymentMethod = paymentMethod;
         this.description = description;
+        this.refundedAmount = refundedAmount != null ? refundedAmount : 0L;
+        this.remainingRefundable = remainingRefundable != null ? remainingRefundable : 0L;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -118,5 +129,21 @@ public class PaymentTransactionResponse {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Long getRefundedAmount() {
+        return refundedAmount;
+    }
+
+    public void setRefundedAmount(Long refundedAmount) {
+        this.refundedAmount = refundedAmount;
+    }
+
+    public Long getRemainingRefundable() {
+        return remainingRefundable;
+    }
+
+    public void setRemainingRefundable(Long remainingRefundable) {
+        this.remainingRefundable = remainingRefundable;
     }
 }

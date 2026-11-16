@@ -1,5 +1,6 @@
 package com.paymentsystem.entity;
 
+import com.paymentsystem.exception.InvalidTransactionStateException;
 import jakarta.persistence.*;
 import java.time.Instant;
 
@@ -62,6 +63,8 @@ public class PaymentTransaction {
     private Instant updatedAt;
 
     public PaymentTransaction() {
+        this.status = PaymentStatus.PENDING;
+        this.retryCount = 0;
     }
 
     public PaymentTransaction(String paymentId, String idempotencyKey, String userId, Long amount, String currency, String paymentMethod, String description) {
@@ -88,11 +91,33 @@ public class PaymentTransaction {
         if (this.retryCount == null) {
             this.retryCount = 0;
         }
+        if (this.status == null) {
+            this.status = PaymentStatus.PENDING;
+        }
     }
 
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = Instant.now();
+    }
+
+    /**
+     * Transition payment to target status according to strict transition rules.
+     * Allowed transitions:
+     * - PENDING -> PROCESSING, FAILED
+     * - PROCESSING -> SUCCESS, FAILED
+     * - SUCCESS -> REFUNDED
+     *
+     * @param targetStatus The requested target state
+     * @throws InvalidTransactionStateException if transition is not permitted
+     */
+    public void transitionTo(PaymentStatus targetStatus) {
+        if (!this.status.canTransitionTo(targetStatus)) {
+            throw new InvalidTransactionStateException(
+                    "Illegal state transition from " + this.status + " to " + targetStatus + " for payment: " + this.paymentId
+            );
+        }
+        this.status = targetStatus;
     }
 
     // Getters and Setters
@@ -146,10 +171,6 @@ public class PaymentTransaction {
 
     public PaymentStatus getStatus() {
         return status;
-    }
-
-    public void setStatus(PaymentStatus status) {
-        this.status = status;
     }
 
     public String getPaymentMethod() {

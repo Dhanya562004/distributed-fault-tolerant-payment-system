@@ -8,6 +8,9 @@ import com.paymentsystem.dto.request.SimulationConfigRequest;
 import com.paymentsystem.dto.response.PaymentResponse;
 import com.paymentsystem.dto.response.RefundResponse;
 import com.paymentsystem.dto.response.UserResponse;
+import com.paymentsystem.entity.PaymentStatus;
+import com.paymentsystem.entity.PaymentTransaction;
+import com.paymentsystem.repository.PaymentTransactionRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +40,9 @@ public class PaymentLifecycleIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private PaymentTransactionRepository paymentRepository;
 
     @Test
     @DisplayName("End-to-End Banking Lifecycle: User Creation -> Idempotent Payment -> Payload Conflict -> Validation -> Refund")
@@ -141,6 +147,10 @@ public class PaymentLifecycleIntegrationTest {
         RefundResponse refund = objectMapper.readValue(refundResult.getResponse().getContentAsString(), RefundResponse.class);
         assertNotNull(refund.getRefundId());
 
+        // Verify that parent payment remains in SUCCESS state after partial refund
+        PaymentTransaction paymentAfterPartial = paymentRepository.findByPaymentId(payment.getPaymentId()).orElseThrow();
+        assertEquals(PaymentStatus.SUCCESS, paymentAfterPartial.getStatus(), "Partial refund must leave payment in SUCCESS state");
+
         // 8. Submit Excessive Refund Exceeding Remaining Payment Balance -> 422 Unprocessable Entity
         ProcessRefundRequest excessiveRefundReq = new ProcessRefundRequest(
                 payment.getPaymentId(), "IDEM_REF_OVERFLOW_" + System.currentTimeMillis(), 20000L, "Exceeds remaining 150 balance"
@@ -151,7 +161,7 @@ public class PaymentLifecycleIntegrationTest {
                         .content(objectMapper.writeValueAsString(excessiveRefundReq)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(header().exists("X-Request-Id"))
-                .andExpect(jsonPath("$.code").value("INVALID_TRANSACTION_STATE"))
+                .andExpect(jsonPath("$.code").value("CUMULATIVE_REFUND_LIMIT_EXCEEDED"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
 
         // 9. Query Audit Logs (paginated list endpoint)

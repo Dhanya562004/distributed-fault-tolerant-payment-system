@@ -13,6 +13,7 @@ import com.paymentsystem.exception.PaymentProcessingException;
 import com.paymentsystem.exception.ResourceNotFoundException;
 import com.paymentsystem.exception.RetryableException;
 import com.paymentsystem.repository.PaymentTransactionRepository;
+import com.paymentsystem.repository.RefundTransactionRepository;
 import com.paymentsystem.repository.UserRepository;
 import com.paymentsystem.security.RequestContext;
 import com.paymentsystem.service.AuditService;
@@ -52,6 +53,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
     private final ObjectMapper objectMapper;
     private final PaymentTransactionCoordinator paymentCoordinator;
     private final PaymentPaginationService paginationService;
+    private final RefundTransactionRepository refundRepository;
     private final org.springframework.transaction.support.TransactionTemplate txTemplate;
     private RetryJitterPolicy retryJitterPolicy = new RetryJitterPolicy();
 
@@ -64,7 +66,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                                         DistributedQueueManager queueManager,
                                         ObjectMapper objectMapper) {
         this(paymentRepository, userRepository, idempotencyService, gatewaySimulationService,
-                auditService, metricsService, queueManager, objectMapper, null, null, null);
+                auditService, metricsService, queueManager, objectMapper, null, null, null, null);
     }
 
     public PaymentProcessingServiceImpl(PaymentTransactionRepository paymentRepository,
@@ -77,7 +79,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                                         ObjectMapper objectMapper,
                                         PaymentTransactionCoordinator paymentCoordinator) {
         this(paymentRepository, userRepository, idempotencyService, gatewaySimulationService,
-                auditService, metricsService, queueManager, objectMapper, paymentCoordinator, null, null);
+                auditService, metricsService, queueManager, objectMapper, paymentCoordinator, null, null, null);
     }
 
     public PaymentProcessingServiceImpl(PaymentTransactionRepository paymentRepository,
@@ -91,7 +93,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                                         PaymentTransactionCoordinator paymentCoordinator,
                                         PaymentPaginationService paginationService) {
         this(paymentRepository, userRepository, idempotencyService, gatewaySimulationService,
-                auditService, metricsService, queueManager, objectMapper, paymentCoordinator, paginationService, null);
+                auditService, metricsService, queueManager, objectMapper, paymentCoordinator, paginationService, null, null);
     }
 
     @Autowired
@@ -105,6 +107,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                                         ObjectMapper objectMapper,
                                         @Autowired(required = false) PaymentTransactionCoordinator paymentCoordinator,
                                         @Autowired(required = false) PaymentPaginationService paginationService,
+                                        @Autowired(required = false) RefundTransactionRepository refundRepository,
                                         @Autowired(required = false) org.springframework.transaction.PlatformTransactionManager transactionManager) {
         this.paymentRepository = paymentRepository;
         this.userRepository = userRepository;
@@ -117,6 +120,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
         this.paymentCoordinator = paymentCoordinator != null ? paymentCoordinator :
                 new PaymentTransactionCoordinator(paymentRepository, null, userRepository, gatewaySimulationService, objectMapper, java.time.Clock.systemUTC());
         this.paginationService = paginationService;
+        this.refundRepository = refundRepository;
         this.txTemplate = transactionManager != null ? new org.springframework.transaction.support.TransactionTemplate(transactionManager) : null;
     }
 
@@ -175,7 +179,6 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                 request.getDescription()
         );
         tx.setRequestId(requestId);
-        tx.setStatus(PaymentStatus.PENDING);
         paymentRepository.saveAndFlush(tx);
 
         paymentCoordinator.commitPaymentProcessing(paymentId);
@@ -219,7 +222,6 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                 request.getDescription()
         );
         tx.setRequestId(requestId);
-        tx.setStatus(PaymentStatus.PENDING);
         paymentRepository.saveAndFlush(tx);
 
         auditService.recordAuditLog(
@@ -480,6 +482,20 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
         response.setCreatedAt(tx.getCreatedAt());
         response.setUpdatedAt(tx.getUpdatedAt());
         response.setIsCachedIdempotentResponse(false);
+
+        long refunded = 0L;
+        if (tx.getStatus() == PaymentStatus.REFUNDED) {
+            refunded = tx.getAmount();
+        } else if (tx.getStatus() == PaymentStatus.SUCCESS && refundRepository != null) {
+            refunded = refundRepository.sumRefundedByPaymentId(tx.getPaymentId());
+        }
+        long remaining = (tx.getStatus() == PaymentStatus.SUCCESS)
+                ? Math.max(0L, tx.getAmount() - refunded)
+                : 0L;
+
+        response.setRefundedAmount(refunded);
+        response.setRemainingRefundable(remaining);
+
         return response;
     }
 

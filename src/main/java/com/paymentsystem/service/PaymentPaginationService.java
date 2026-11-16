@@ -8,6 +8,7 @@ import com.paymentsystem.entity.PaymentStatus;
 import com.paymentsystem.entity.PaymentTransaction;
 import com.paymentsystem.exception.InvalidPaginationFilterException;
 import com.paymentsystem.repository.PaymentTransactionRepository;
+import com.paymentsystem.repository.RefundTransactionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,15 +37,25 @@ public class PaymentPaginationService {
     private final PaymentTransactionRepository paymentRepository;
     private final CursorCodecService cursorCodecService;
     private final PaymentPaginationSecurityService securityService;
+    private final RefundTransactionRepository refundRepository;
+
+    public PaymentPaginationService(
+            PaymentTransactionRepository paymentRepository,
+            CursorCodecService cursorCodecService,
+            PaymentPaginationSecurityService securityService) {
+        this(paymentRepository, cursorCodecService, securityService, null);
+    }
 
     @Autowired
     public PaymentPaginationService(
             PaymentTransactionRepository paymentRepository,
             CursorCodecService cursorCodecService,
-            PaymentPaginationSecurityService securityService) {
+            PaymentPaginationSecurityService securityService,
+            @Autowired(required = false) RefundTransactionRepository refundRepository) {
         this.paymentRepository = paymentRepository;
         this.cursorCodecService = cursorCodecService;
         this.securityService = securityService;
+        this.refundRepository = refundRepository;
     }
 
     /**
@@ -149,6 +160,16 @@ public class PaymentPaginationService {
     }
 
     private PaymentTransactionResponse mapToResponseDto(PaymentTransaction tx) {
+        long refundedAmount = 0L;
+        if (tx.getStatus() == PaymentStatus.REFUNDED) {
+            refundedAmount = tx.getAmount();
+        } else if (tx.getStatus() == PaymentStatus.SUCCESS && refundRepository != null) {
+            refundedAmount = refundRepository.sumRefundedByPaymentId(tx.getPaymentId());
+        }
+        long remainingRefundable = (tx.getStatus() == PaymentStatus.SUCCESS)
+                ? Math.max(0L, tx.getAmount() - refundedAmount)
+                : 0L;
+
         return new PaymentTransactionResponse(
                 tx.getPaymentId(),
                 tx.getPaymentId(),
@@ -158,6 +179,8 @@ public class PaymentPaginationService {
                 tx.getStatus(),
                 tx.getPaymentMethod(),
                 tx.getDescription(),
+                refundedAmount,
+                remainingRefundable,
                 tx.getCreatedAt(),
                 tx.getUpdatedAt()
         );

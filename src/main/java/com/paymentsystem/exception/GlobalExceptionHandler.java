@@ -112,6 +112,21 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
     }
 
+    @ExceptionHandler(CumulativeRefundLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleCumulativeRefundLimit(CumulativeRefundLimitExceededException ex, HttpServletRequest request) {
+        String traceId = resolveRequestId(request);
+        logger.warn("[Trace: {}] Cumulative refund limit exceeded: {}", traceId, ex.getMessage());
+        ErrorResponse response = new ErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                "CUMULATIVE_REFUND_LIMIT_EXCEEDED",
+                ex.getMessage(),
+                request.getRequestURI(),
+                traceId,
+                List.of("The requested refund amount exceeds the remaining refundable balance of the payment.")
+        );
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
+    }
+
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<ErrorResponse> handleOptimisticLocking(OptimisticLockingFailureException ex, HttpServletRequest request) {
         String traceId = resolveRequestId(request);

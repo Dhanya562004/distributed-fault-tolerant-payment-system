@@ -500,7 +500,36 @@ def api_get(endpoint):
     elif endpoint == "/api/v1/simulation/dlq":
         dlq_msgs = [p for p in st.session_state.sim_payments if p.get("retryCount", 0) >= 3]
         return {"dlqCount": len(dlq_msgs), "messages": dlq_msgs}
+    elif endpoint == "/api/v1/currencies":
+        return [
+            {"code": "USD", "decimalPlaces": 2, "name": "US Dollar"},
+            {"code": "EUR", "decimalPlaces": 2, "name": "Euro"},
+            {"code": "GBP", "decimalPlaces": 2, "name": "British Pound"},
+            {"code": "INR", "decimalPlaces": 2, "name": "Indian Rupee"}
+        ]
     return None
+
+def fetch_currency_precisions():
+    try:
+        data = api_get("/api/v1/currencies")
+        if isinstance(data, list):
+            return {c["code"]: c.get("decimalPlaces", 2) for c in data if "code" in c}
+    except Exception:
+        pass
+    return {"USD": 2, "EUR": 2, "GBP": 2, "INR": 2}
+
+def format_amount(amount_minor, currency_code="USD"):
+    precisions = fetch_currency_precisions()
+    decimals = precisions.get(currency_code, 2)
+    factor = 10 ** decimals
+    val = float(amount_minor if amount_minor is not None else 0) / float(factor)
+    return f"{val:.{decimals}f}"
+
+def parse_to_minor_units(amount_val, currency_code="USD"):
+    precisions = fetch_currency_precisions()
+    decimals = precisions.get(currency_code, 2)
+    factor = 10 ** decimals
+    return int(round(float(amount_val) * factor))
 
 def api_post(endpoint, payload, headers=None):
     if is_live_backend:
@@ -1066,17 +1095,39 @@ with tab_live:
             st.markdown("#### ⚡ Quick Actions & Audit Trail")
             if selected_tx.get("status") == "SUCCESS":
                 target_pid = selected_tx.get("paymentId")
+                curr = selected_tx.get("currency", "USD")
+                precisions = fetch_currency_precisions()
+                decimals = precisions.get(curr, 2)
+                rem_minor = selected_tx.get("remainingRefundable")
+                if rem_minor is None:
+                    rem_minor = selected_tx.get("amount", 0)
+                rem_formatted = format_amount(rem_minor, curr)
+                is_zero_remaining = (rem_minor <= 0)
+
                 with st.form(f"refund_quick_{target_pid}"):
-                    st.write(f"Issue refund for **${float(selected_tx.get('amount', 0))/100.0:.2f} {selected_tx.get('currency')}**")
+                    st.write(f"Remaining Refundable: **{rem_formatted} {curr}** (Captured: {format_amount(selected_tx.get('amount', 0), curr)} {curr})")
+                    quick_amt = st.number_input(
+                        f"Refund Amount ({curr})",
+                        min_value=0.0 if is_zero_remaining else 1.0 / (10 ** decimals),
+                        max_value=max(0.0, float(rem_formatted)),
+                        value=float(rem_formatted) if not is_zero_remaining else 0.0,
+                        step=1.0,
+                        format=f"%.{decimals}f",
+                        disabled=is_zero_remaining
+                    )
                     reason_input = st.text_input("Refund Reason", value="Customer initiated portal return")
-                    if st.form_submit_button("💸 Process Instant Refund", use_container_width=True):
+                    if is_zero_remaining:
+                        st.info("ℹ️ This transaction has zero remaining refundable balance.")
+                    if st.form_submit_button("💸 Process Instant Refund", use_container_width=True, disabled=is_zero_remaining):
                         if not target_pid or not str(target_pid).strip():
                             st.warning("⚠️ Payment ID is required to execute refund.")
+                        elif is_zero_remaining:
+                            st.warning("⚠️ This payment is already fully refunded.")
                         else:
                             quick_idem = f"REF_IDEM_{int(time.time()*1000)}"
                             ref_status, ref_data = api_post("/api/v1/refunds", {
                                 "paymentId": str(target_pid).strip(),
-                                "amount": int(round(float(selected_tx.get("amount", 10000)))),
+                                "amount": parse_to_minor_units(quick_amt, curr),
                                 "idempotencyKey": quick_idem,
                                 "reason": reason_input
                             }, headers={"X-Idempotency-Key": quick_idem})
@@ -1188,15 +1239,24 @@ with tab_simulate:
     with sim_col2:
         st.markdown("### 🔄 Process Refund")
 
-        # Determine refundable transactions
-        refundable_payments = [p for p in payments_list if p.get("status") == "SUCCESS"]
+        # Determine refundable transactions (SUCCESS and remainingRefundable > 0)
+        refundable_payments = [
+            p for p in payments_list
+            if p.get("status") == "SUCCESS" and p.get("remainingRefundable", p.get("amount", 0)) > 0
+        ]
         all_available_payments = payments_list if payments_list else []
 
         refund_options = []
         if refundable_payments:
-            refund_options = [f"{p['paymentId']} (${float(p.get('amount', 0))/100.0:.2f} {p.get('currency', 'USD')} - {p.get('userId')})" for p in refundable_payments]
+            refund_options = [
+                f"{p['paymentId']} (Remaining: {format_amount(p.get('remainingRefundable', p.get('amount', 0)), p.get('currency', 'USD'))} {p.get('currency', 'USD')} - {p.get('userId')})"
+                for p in refundable_payments
+            ]
         elif all_available_payments:
-            refund_options = [f"{p['paymentId']} (${float(p.get('amount', 0))/100.0:.2f} {p.get('currency', 'USD')} - {p.get('status')})" for p in all_available_payments]
+            refund_options = [
+                f"{p['paymentId']} (Remaining: {format_amount(p.get('remainingRefundable', 0), p.get('currency', 'USD'))} {p.get('currency', 'USD')} - {p.get('status')})"
+                for p in all_available_payments
+            ]
 
         refund_options.append("✍️ Enter Custom Payment ID manually")
 
@@ -1212,10 +1272,18 @@ with tab_simulate:
             chosen_id = selected_refund_option.split(" ")[0]
             selected_pay_obj = next((p for p in payments_list if p.get("paymentId") == chosen_id), None)
             default_payment_id = chosen_id
-            default_refund_amount = (float(selected_pay_obj.get("amount", 8999)) / 100.0) if selected_pay_obj else 89.99
+            curr = selected_pay_obj.get("currency", "USD") if selected_pay_obj else "USD"
+            precisions = fetch_currency_precisions()
+            decimals = precisions.get(curr, 2)
+            rem_minor = selected_pay_obj.get("remainingRefundable", selected_pay_obj.get("amount", 8999)) if selected_pay_obj else 8999
+            default_refund_amount = float(format_amount(rem_minor, curr))
+            is_zero_refundable = (rem_minor <= 0)
         else:
             default_payment_id = ""
+            curr = "USD"
+            decimals = 2
             default_refund_amount = 89.99
+            is_zero_refundable = False
 
         with st.form("refund_form"):
             if selected_refund_option == "✍️ Enter Custom Payment ID manually":
@@ -1224,16 +1292,21 @@ with tab_simulate:
                 refundPaymentId = st.text_input("Target Payment ID", value=default_payment_id, help="Selected transaction ID to refund")
 
             refundAmount = st.number_input(
-                "Refund Amount",
-                min_value=0.01,
-                value=max(0.01, default_refund_amount),
-                step=10.0,
-                format="%.2f"
+                f"Refund Amount ({curr})",
+                min_value=0.0 if is_zero_refundable else 1.0 / (10 ** decimals),
+                max_value=max(0.0, default_refund_amount) if not is_zero_refundable else 0.0,
+                value=default_refund_amount if not is_zero_refundable else 0.0,
+                step=1.0,
+                format=f"%.{decimals}f",
+                disabled=is_zero_refundable
             )
             refundIdemKey = st.text_input("Refund Idempotency Key", value=f"REF_IDEM_{int(time.time()*1000)}")
             refundReason = st.text_input("Reason for Refund", value="Customer returned item under return window")
 
-            refund_submitted = st.form_submit_button("💸 Execute Refund", use_container_width=True)
+            if is_zero_refundable:
+                st.warning("⚠️ This payment has zero remaining refundable balance.")
+
+            refund_submitted = st.form_submit_button("💸 Execute Refund", use_container_width=True, disabled=is_zero_refundable)
 
             if refund_submitted:
                 clean_pid = refundPaymentId.strip() if refundPaymentId else ""
@@ -1242,7 +1315,7 @@ with tab_simulate:
                 else:
                     payload = {
                         "paymentId": clean_pid,
-                        "amount": int(round(float(refundAmount) * 100)),
+                        "amount": parse_to_minor_units(refundAmount, curr),
                         "idempotencyKey": refundIdemKey.strip() or f"REF_IDEM_{int(time.time()*1000)}",
                         "reason": refundReason
                     }

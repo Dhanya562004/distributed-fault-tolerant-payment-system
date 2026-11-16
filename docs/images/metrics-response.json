@@ -13,9 +13,7 @@
     "FAILED": 0,
     "REFUNDED": 0,
     "PROCESSING": 0,
-    "REFUND_PENDING": 0,
-    "PENDING": 0,
-    "REFUND_FAILED": 0
+    "PENDING": 0
   },
   "timestamp": "2026-11-01T08:08:54.923108500Z"
 }

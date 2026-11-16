@@ -65,7 +65,7 @@ class PaymentPaginationIntegrationTest {
                 "CREDIT_CARD",
                 "Transaction " + paymentId
         );
-        tx.setStatus(status);
+        com.paymentsystem.test.PaymentTestHelper.walkToState(tx, status);
         tx.setCreatedAt(createdAt);
         tx.setUpdatedAt(createdAt);
         return paymentRepository.saveAndFlush(tx);

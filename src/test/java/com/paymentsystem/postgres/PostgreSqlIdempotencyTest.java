@@ -416,7 +416,7 @@ public class PostgreSqlIdempotencyTest extends AbstractPostgreSqlIntegrationTest
         PaymentTransaction tx = new PaymentTransaction(
                 paymentId, key, userCode, 10000L, "USD", "CREDIT_CARD", "PG Recovered payment"
         );
-        tx.setStatus(PaymentStatus.SUCCESS);
+        com.paymentsystem.test.PaymentTestHelper.walkToState(tx, PaymentStatus.SUCCESS);
         paymentTransactionRepository.saveAndFlush(tx);
 
         InitiatePaymentRequest req = new InitiatePaymentRequest(

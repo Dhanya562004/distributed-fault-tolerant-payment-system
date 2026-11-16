@@ -20,6 +20,8 @@ public class PaymentResponse {
     private Instant updatedAt;
     private Boolean isCachedIdempotentResponse;
     private String requestId;
+    private Long refundedAmount = 0L;
+    private Long remainingRefundable = 0L;
 
     public PaymentResponse() {
     }
@@ -134,5 +136,21 @@ public class PaymentResponse {
 
     public void setRequestId(String requestId) {
         this.requestId = requestId;
+    }
+
+    public Long getRefundedAmount() {
+        return refundedAmount;
+    }
+
+    public void setRefundedAmount(Long refundedAmount) {
+        this.refundedAmount = refundedAmount;
+    }
+
+    public Long getRemainingRefundable() {
+        return remainingRefundable;
+    }
+
+    public void setRemainingRefundable(Long remainingRefundable) {
+        this.remainingRefundable = remainingRefundable;
     }
 }

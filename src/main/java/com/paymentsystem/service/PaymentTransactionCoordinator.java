@@ -10,6 +10,7 @@ import com.paymentsystem.entity.PaymentTransaction;
 import com.paymentsystem.entity.RefundTransaction;
 import com.paymentsystem.entity.User;
 import com.paymentsystem.exception.InsufficientBalanceException;
+import com.paymentsystem.exception.InvalidTransactionStateException;
 import com.paymentsystem.exception.ResourceNotFoundException;
 import com.paymentsystem.repository.OutboxEventRepository;
 import com.paymentsystem.repository.PaymentTransactionRepository;
@@ -98,11 +99,11 @@ public class PaymentTransactionCoordinator {
                 .or(() -> paymentRepository.findByPaymentId(paymentId))
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found for ID: " + paymentId));
 
-        if (tx.getStatus() == PaymentStatus.SUCCESS || tx.getStatus() == PaymentStatus.FAILED) {
+        if (tx.getStatus() == PaymentStatus.SUCCESS || tx.getStatus() == PaymentStatus.FAILED || tx.getStatus() == PaymentStatus.PROCESSING) {
             return tx;
         }
 
-        tx.setStatus(PaymentStatus.PROCESSING);
+        tx.transitionTo(PaymentStatus.PROCESSING);
         tx.setUpdatedAt(now);
         return paymentRepository.saveAndFlush(tx);
     }
@@ -130,7 +131,7 @@ public class PaymentTransactionCoordinator {
             return tx;
         }
         if (tx.getStatus() == PaymentStatus.FAILED) {
-            throw new IllegalStateException("Payment " + paymentId + " has already FAILED; cannot retry");
+            throw new InvalidTransactionStateException("Payment " + paymentId + " has already FAILED; cannot retry");
         }
 
         // 3. Simulate DB interaction check
@@ -161,7 +162,7 @@ public class PaymentTransactionCoordinator {
         }
 
         // 6. Update payment status to SUCCESS
-        tx.setStatus(PaymentStatus.SUCCESS);
+        tx.transitionTo(PaymentStatus.SUCCESS);
         tx.setUpdatedAt(now);
         PaymentTransaction savedTx = paymentRepository.saveAndFlush(tx);
 
@@ -215,8 +216,11 @@ public class PaymentTransactionCoordinator {
             logger.warn("Cannot mark payment {} as FAILED because it is already SUCCESS", paymentId);
             return tx;
         }
+        if (tx.getStatus() == PaymentStatus.FAILED) {
+            return tx;
+        }
 
-        tx.setStatus(PaymentStatus.FAILED);
+        tx.transitionTo(PaymentStatus.FAILED);
         tx.setFailureReason(failureReason);
         tx.setRetryCount(retryCount);
         tx.setUpdatedAt(now);
@@ -241,7 +245,12 @@ public class PaymentTransactionCoordinator {
     @Transactional
     public OutboxEvent commitPaymentSuccess(PaymentTransaction tx, int maxAttempts) {
         Instant now = Instant.now(clock);
-        tx.setStatus(PaymentStatus.SUCCESS);
+        if (tx.getStatus() != PaymentStatus.SUCCESS) {
+            if (tx.getStatus() == PaymentStatus.PENDING) {
+                tx.transitionTo(PaymentStatus.PROCESSING);
+            }
+            tx.transitionTo(PaymentStatus.SUCCESS);
+        }
         tx.setUpdatedAt(now);
         paymentRepository.saveAndFlush(tx);
 
@@ -262,7 +271,9 @@ public class PaymentTransactionCoordinator {
     @Transactional
     public OutboxEvent commitPaymentFailure(PaymentTransaction tx, String failureReason, int maxAttempts) {
         Instant now = Instant.now(clock);
-        tx.setStatus(PaymentStatus.FAILED);
+        if (tx.getStatus() != PaymentStatus.FAILED) {
+            tx.transitionTo(PaymentStatus.FAILED);
+        }
         tx.setFailureReason(failureReason);
         tx.setUpdatedAt(now);
         paymentRepository.saveAndFlush(tx);

@@ -86,13 +86,13 @@ The human project owner directed and governed the development lifecycle:
 
 ### Reported Automated Test Results
 
-The repository test suite consists of **187 total automated tests** across 28 test classes, structured into two execution tiers:
+The repository test suite consists of **220 total automated tests** across 33 test classes, structured into two execution tiers:
 
 | Test Execution Stage | Environment | Test Count | Status | Verified Evidence |
 | :--- | :--- | :---: | :---: | :--- |
-| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 149 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` (149 tests passed in 01:07 min). |
-| **Stage B: Concurrency & Real Database** | PostgreSQL 16 Testcontainers (Docker) | 38 | **Configured** (Docker-dependent) | 38 tests across 6 classes (including 3 stuck-key recovery tests in `PostgreSqlIdempotencyTest` and atomic commit tests in `PostgreSqlAtomicPaymentCommitIntegrationTest`). Requires running Docker daemon (`mvn test -Ppostgres-it`). |
-| **Total Automated Suite** | Combined | **187** | **149 Passing locally (Docker-free), 38 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
+| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 182 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` (182 tests passed in 01:13 min). |
+| **Stage B: Concurrency & Real Database** | PostgreSQL 16 Testcontainers (Docker) | 38 | **Configured** (Docker-dependent) | 38 tests across 7 classes (including concurrency & locking tests in `PostgreSqlRefundConcurrencyTest`, `PostgreSqlIdempotencyTest`, and `PostgreSqlAtomicPaymentCommitIntegrationTest`). Requires running Docker daemon (`mvn test -Ppostgres-it`). |
+| **Total Automated Suite** | Combined | **220** | **182 Passing locally (Docker-free), 38 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
 
 ### Concurrency Stress Benchmark
 - **Test Implementation:** `ConcurrentPaymentTest` (H2) and `PostgreSqlConcurrencyStressTest` (PostgreSQL 16).
@@ -197,6 +197,18 @@ Transparency regarding AI-assisted development requires acknowledging key techni
 7. **Gateway Transient Failure Simulation Race in Retry Test**:
    - *Mistake*: `testAttempt1FailsAfterDeduction_Attempt2Succeeds_BalanceDeductedOnce` initially used a background thread with `Thread.sleep(600)` to reset gateway behavior, creating timing sensitivity across varying machine load.
    - *Correction*: Replaced asynchronous timing with a deterministic Mockito spy: `doThrow(new ServiceUnavailableException(...)).doNothing().when(gatewaySimulationService).simulateGatewayCall(...)`.
+
+### Phase 4 PR 1B AI Mistakes and Corrections Log
+1. **JPA EntityManager Clearing Side Effect (`IdempotencyServiceImpl.java`)**:
+   - *Mistake*: In `IdempotencyServiceImpl.java`, `idempotencyKeyRepository.updateStuckKeyConditionally` carries `@Modifying(clearAutomatically = true)`. Calling `paymentRepository.save(tx)` before this query left `tx` unflushed in the session; when Spring Data JPA ran the modifying query, `clearAutomatically = true` cleared the Hibernate L1 cache, discarding pending unwritten updates to `payments`.
+   - *Impact*: In `PaymentRecoveryRaceIntegrationTest`, the stuck payment remained in `PROCESSING` rather than transitioning to `FAILED`.
+   - *Correction*: Replaced `paymentRepository.save(tx)` with `paymentRepository.saveAndFlush(tx)` in `IdempotencyServiceImpl.java`, immediately flushing the update to SQL before the session clear occurs, and called `entityManager.clear()` in test before DB reload assertion.
+2. **Missing Imports in `PaymentLifecycleIntegrationTest.java` and `PaymentTransactionCoordinator.java`**:
+   - *Mistake*: After refactoring `PaymentTransaction` and deleting `setStatus()`, missing imports for `PaymentTransactionRepository` in `PaymentLifecycleIntegrationTest` and `InvalidTransactionStateException` in `PaymentTransactionCoordinator` caused compile-time errors.
+   - *Correction*: Added explicit imports for the required classes.
+3. **Exception Disambiguation & Assertion Alignment**:
+   - *Mistake*: In concurrent refund tests, attempting to refund when cumulative limit is reached was initially expected to throw `InvalidTransactionStateException`, whereas business logic rightly distinguished `CumulativeRefundLimitExceededException` (HTTP 422 `CUMULATIVE_REFUND_LIMIT_EXCEEDED`) for partial over-refund vs `InvalidTransactionStateException` (HTTP 422 `INVALID_TRANSACTION_STATE`) for refunding an already `REFUNDED` payment.
+   - *Correction*: Structured distinct exception handling in `GlobalExceptionHandler` and aligned test assertions in both unit and integration tests.
 
 ---
 

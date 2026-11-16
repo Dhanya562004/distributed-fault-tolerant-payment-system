@@ -318,43 +318,61 @@ public class IdempotencyServiceImpl implements IdempotencyService {
         for (IdempotencyKeyRecord keyRecord : stuckKeys) {
             String keyValue = keyRecord.getKeyValue();
             Optional<PaymentTransaction> paymentOpt = paymentRepository != null ?
-                    paymentRepository.findByIdempotencyKey(keyValue) : Optional.empty();
+                    paymentRepository.findByIdempotencyKeyForUpdate(keyValue)
+                            .or(() -> paymentRepository.findByIdempotencyKey(keyValue)) : Optional.empty();
 
             IdempotencyKeyRecord.Status targetStatus;
             String responseBody;
             int statusCode;
 
-            if (paymentOpt.isPresent() && paymentOpt.get().getStatus() == PaymentStatus.SUCCESS) {
+            if (paymentOpt.isPresent()) {
                 PaymentTransaction tx = paymentOpt.get();
-                PaymentResponse response = new PaymentResponse();
-                response.setPaymentId(tx.getPaymentId());
-                response.setIdempotencyKey(tx.getIdempotencyKey());
-                response.setUserId(tx.getUserId());
-                response.setAmount(tx.getAmount());
-                response.setCurrency(tx.getCurrency());
-                response.setStatus(tx.getStatus());
-                response.setPaymentMethod(tx.getPaymentMethod());
-                response.setDescription(tx.getDescription());
-                response.setFailureReason(tx.getFailureReason());
-                response.setRetryCount(tx.getRetryCount());
-                response.setCreatedAt(tx.getCreatedAt());
-                response.setUpdatedAt(tx.getUpdatedAt());
-                response.setIsCachedIdempotentResponse(true);
+                if (tx.getStatus() == PaymentStatus.SUCCESS) {
+                    PaymentResponse response = new PaymentResponse();
+                    response.setPaymentId(tx.getPaymentId());
+                    response.setIdempotencyKey(tx.getIdempotencyKey());
+                    response.setUserId(tx.getUserId());
+                    response.setAmount(tx.getAmount());
+                    response.setCurrency(tx.getCurrency());
+                    response.setStatus(tx.getStatus());
+                    response.setPaymentMethod(tx.getPaymentMethod());
+                    response.setDescription(tx.getDescription());
+                    response.setFailureReason(tx.getFailureReason());
+                    response.setRetryCount(tx.getRetryCount());
+                    response.setCreatedAt(tx.getCreatedAt());
+                    response.setUpdatedAt(tx.getUpdatedAt());
+                    response.setIsCachedIdempotentResponse(true);
 
-                try {
-                    responseBody = objectMapper.writeValueAsString(response);
-                } catch (Exception e) {
-                    logger.error("Failed serializing recovered payment response for key: {}", keyValue, e);
-                    responseBody = "{\"status\":\"SUCCESS\",\"paymentId\":\"" + tx.getPaymentId() + "\"}";
+                    try {
+                        responseBody = objectMapper.writeValueAsString(response);
+                    } catch (Exception e) {
+                        logger.error("Failed serializing recovered payment response for key: {}", keyValue, e);
+                        responseBody = "{\"status\":\"SUCCESS\",\"paymentId\":\"" + tx.getPaymentId() + "\"}";
+                    }
+                    statusCode = 200;
+                    targetStatus = IdempotencyKeyRecord.Status.COMPLETED;
+                    logger.info("[IDEMPOTENCY RECOVERY] Found successful payment {} for stuck key [{}]. Marking COMPLETED.", tx.getPaymentId(), keyValue);
+                } else if (tx.getStatus() == PaymentStatus.PROCESSING || tx.getStatus() == PaymentStatus.PENDING) {
+                    // Transition stuck payment to FAILED without moving money
+                    tx.transitionTo(PaymentStatus.FAILED);
+                    tx.setFailureReason("Transaction recovery: operation abandoned or timed out while in progress");
+                    paymentRepository.saveAndFlush(tx);
+
+                    responseBody = "{\"error\":\"Transaction recovery: operation abandoned or timed out while in progress\"}";
+                    statusCode = 500;
+                    targetStatus = IdempotencyKeyRecord.Status.FAILED;
+                    logger.warn("[IDEMPOTENCY RECOVERY] Payment {} in state {} for stuck key [{}]. Transitioned to FAILED.", tx.getPaymentId(), tx.getStatus(), keyValue);
+                } else {
+                    responseBody = "{\"error\":\"Transaction recovery: operation abandoned or timed out while in progress\"}";
+                    statusCode = 500;
+                    targetStatus = IdempotencyKeyRecord.Status.FAILED;
+                    logger.warn("[IDEMPOTENCY RECOVERY] Payment {} in state {} for stuck key [{}]. Marking FAILED.", tx.getPaymentId(), tx.getStatus(), keyValue);
                 }
-                statusCode = 200;
-                targetStatus = IdempotencyKeyRecord.Status.COMPLETED;
-                logger.info("[IDEMPOTENCY RECOVERY] Found successful payment {} for stuck key [{}]. Marking COMPLETED.", tx.getPaymentId(), keyValue);
             } else {
                 responseBody = "{\"error\":\"Transaction recovery: operation abandoned or timed out while in progress\"}";
                 statusCode = 500;
                 targetStatus = IdempotencyKeyRecord.Status.FAILED;
-                logger.warn("[IDEMPOTENCY RECOVERY] No successful payment found for stuck key [{}]. Marking FAILED.", keyValue);
+                logger.warn("[IDEMPOTENCY RECOVERY] No payment transaction found for stuck key [{}]. Marking FAILED.", keyValue);
             }
 
             int updated = idempotencyKeyRepository.updateStuckKeyConditionally(
@@ -369,6 +387,38 @@ public class IdempotencyServiceImpl implements IdempotencyService {
 
             if (updated > 0) {
                 recoveredCount++;
+            }
+        }
+
+        // Also sweep any orphaned payments stuck in PENDING or PROCESSING older than threshold
+        if (paymentRepository != null) {
+            List<PaymentTransaction> stuckPayments = paymentRepository.findStuckPayments(
+                    List.of(PaymentStatus.PENDING, PaymentStatus.PROCESSING), cutoff
+            );
+            for (PaymentTransaction p : stuckPayments) {
+                Optional<PaymentTransaction> lockedOpt = paymentRepository.findByPaymentIdForUpdate(p.getPaymentId());
+                if (lockedOpt.isPresent()) {
+                    PaymentTransaction lockedTx = lockedOpt.get();
+                    if ((lockedTx.getStatus() == PaymentStatus.PENDING || lockedTx.getStatus() == PaymentStatus.PROCESSING)
+                            && lockedTx.getCreatedAt().isBefore(cutoff)) {
+                        lockedTx.transitionTo(PaymentStatus.FAILED);
+                        lockedTx.setFailureReason("Transaction recovery: operation abandoned or timed out while in progress");
+                        paymentRepository.saveAndFlush(lockedTx);
+                        logger.warn("[PAYMENT RECOVERY] Abandoned payment {} (status: {}) transitioned to FAILED.", lockedTx.getPaymentId(), p.getStatus());
+
+                        if (lockedTx.getIdempotencyKey() != null) {
+                            idempotencyKeyRepository.updateStuckKeyConditionally(
+                                    lockedTx.getIdempotencyKey(),
+                                    IdempotencyKeyRecord.Status.IN_PROGRESS,
+                                    IdempotencyKeyRecord.Status.FAILED,
+                                    "{\"error\":\"Transaction recovery: operation abandoned or timed out while in progress\"}",
+                                    500,
+                                    cutoff,
+                                    now
+                            );
+                        }
+                    }
+                }
             }
         }
 

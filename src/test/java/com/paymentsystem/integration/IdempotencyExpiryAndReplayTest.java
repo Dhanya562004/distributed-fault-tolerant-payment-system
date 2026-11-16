@@ -582,7 +582,7 @@ public class IdempotencyExpiryAndReplayTest {
         PaymentTransaction tx = new PaymentTransaction(
                 paymentId, key, userCode, 10000L, "USD", "CREDIT_CARD", "Recovered test payment"
         );
-        tx.setStatus(PaymentStatus.SUCCESS);
+        com.paymentsystem.test.PaymentTestHelper.walkToState(tx, PaymentStatus.SUCCESS);
         paymentTransactionRepository.saveAndFlush(tx);
 
         InitiatePaymentRequest req = new InitiatePaymentRequest(

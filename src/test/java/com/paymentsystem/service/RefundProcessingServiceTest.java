@@ -8,12 +8,14 @@ import com.paymentsystem.entity.PaymentStatus;
 import com.paymentsystem.entity.PaymentTransaction;
 import com.paymentsystem.entity.RefundTransaction;
 import com.paymentsystem.entity.User;
+import com.paymentsystem.exception.CumulativeRefundLimitExceededException;
 import com.paymentsystem.exception.InvalidTransactionStateException;
 import com.paymentsystem.exception.ResourceNotFoundException;
 import com.paymentsystem.repository.PaymentTransactionRepository;
 import com.paymentsystem.repository.RefundTransactionRepository;
 import com.paymentsystem.repository.UserRepository;
 import com.paymentsystem.service.impl.RefundProcessingServiceImpl;
+import com.paymentsystem.test.PaymentTestHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -71,7 +73,7 @@ class RefundProcessingServiceTest {
         Long refundAmount = 10000L;
 
         PaymentTransaction payment = new PaymentTransaction(paymentId, "IDEM_1001", userId, paymentAmount, "USD", "CREDIT_CARD", "Test payment");
-        payment.setStatus(PaymentStatus.SUCCESS);
+        PaymentTestHelper.walkToState(payment, PaymentStatus.SUCCESS);
 
         User user = new User(userId, "Bob", "bob@example.com", 50000L);
 
@@ -88,10 +90,38 @@ class RefundProcessingServiceTest {
         assertNotNull(response.getRefundId());
         assertEquals(refundAmount, response.getAmount());
         assertEquals(PaymentStatus.REFUNDED, response.getStatus());
+        assertEquals(PaymentStatus.SUCCESS, payment.getStatus(), "Partial refund must leave payment in SUCCESS state");
 
         verify(refundRepository, times(1)).save(any(RefundTransaction.class));
         verify(userRepository, times(1)).save(argThat(u -> u.getBalance() == 60000L));
         verify(idempotencyService, times(1)).markCompleted(eq("IDEM_REF_1001"), any(), eq(200));
+    }
+
+    @Test
+    @DisplayName("Should transition payment to REFUNDED when cumulative refunds equal full payment amount")
+    void testProcessRefund_FullRefund_TransitionsToRefunded() {
+        String paymentId = "PAY_FULL_1001";
+        String userId = "USR_BOB";
+        Long paymentAmount = 20000L;
+        Long refundAmount = 20000L;
+
+        PaymentTransaction payment = new PaymentTransaction(paymentId, "IDEM_FULL_1001", userId, paymentAmount, "USD", "CREDIT_CARD", "Full refund test");
+        PaymentTestHelper.walkToState(payment, PaymentStatus.SUCCESS);
+
+        User user = new User(userId, "Bob", "bob@example.com", 50000L);
+        ProcessRefundRequest request = new ProcessRefundRequest(paymentId, "IDEM_REF_FULL_1001", refundAmount, "Full refund");
+
+        when(idempotencyService.tryAcquireOrGet(eq("IDEM_REF_FULL_1001"), any())).thenReturn(Optional.empty());
+        when(paymentRepository.findByPaymentId(paymentId)).thenReturn(Optional.of(payment));
+        when(refundRepository.findByPaymentId(paymentId)).thenReturn(List.of());
+        when(userRepository.findByUserCode(userId)).thenReturn(Optional.of(user));
+
+        RefundResponse response = refundService.processRefund(request);
+
+        assertNotNull(response);
+        assertEquals(PaymentStatus.REFUNDED, response.getStatus());
+        assertEquals(PaymentStatus.REFUNDED, payment.getStatus(), "Full refund must transition payment to REFUNDED state");
+        verify(paymentRepository, times(1)).save(payment);
     }
 
     @Test
@@ -101,7 +131,7 @@ class RefundProcessingServiceTest {
         ProcessRefundRequest request = new ProcessRefundRequest(paymentId, "IDEM_REF_1002", 5000L, "Invalid refund");
 
         PaymentTransaction payment = new PaymentTransaction(paymentId, "IDEM_1002", "USR_BOB", 10000L, "USD", "CREDIT_CARD", "Test");
-        payment.setStatus(PaymentStatus.FAILED);
+        PaymentTestHelper.walkToState(payment, PaymentStatus.FAILED);
 
         when(idempotencyService.tryAcquireOrGet(eq("IDEM_REF_1002"), any())).thenReturn(Optional.empty());
         when(paymentRepository.findByPaymentId(paymentId)).thenReturn(Optional.of(payment));
@@ -110,13 +140,13 @@ class RefundProcessingServiceTest {
     }
 
     @Test
-    @DisplayName("Should throw InvalidTransactionStateException when cumulative refund exceeds payment amount")
+    @DisplayName("Should throw CumulativeRefundLimitExceededException when cumulative refund exceeds payment amount")
     void testProcessRefund_ExceedsOriginalAmount_ThrowsException() {
         String paymentId = "PAY_1003";
         Long paymentAmount = 10000L;
 
         PaymentTransaction payment = new PaymentTransaction(paymentId, "IDEM_1003", "USR_BOB", paymentAmount, "USD", "CREDIT_CARD", "Test");
-        payment.setStatus(PaymentStatus.SUCCESS);
+        PaymentTestHelper.walkToState(payment, PaymentStatus.SUCCESS);
 
         RefundTransaction priorRefund = new RefundTransaction("REF_001", paymentId, "USR_BOB", 8000L, PaymentStatus.REFUNDED, "Prior partial refund");
 
@@ -126,7 +156,7 @@ class RefundProcessingServiceTest {
         when(paymentRepository.findByPaymentId(paymentId)).thenReturn(Optional.of(payment));
         when(refundRepository.findByPaymentId(paymentId)).thenReturn(List.of(priorRefund));
 
-        assertThrows(InvalidTransactionStateException.class, () -> refundService.processRefund(request));
+        assertThrows(CumulativeRefundLimitExceededException.class, () -> refundService.processRefund(request));
     }
 
     @Test
@@ -163,7 +193,7 @@ class RefundProcessingServiceTest {
         Long refundAmount = 4000L;
 
         PaymentTransaction payment = new PaymentTransaction(paymentId, "IDEM_PESS_99", userId, paymentAmount, "USD", "CREDIT_CARD", "Pessimistic Test");
-        payment.setStatus(PaymentStatus.SUCCESS);
+        PaymentTestHelper.walkToState(payment, PaymentStatus.SUCCESS);
         User user = new User(userId, "Alice", "alice@example.com", 20000L);
 
         ProcessRefundRequest request = new ProcessRefundRequest(paymentId, "IDEM_REF_PESS_99", refundAmount, "Locking test");

@@ -110,9 +110,7 @@ The following endpoints are **completely safe to test** in the live cloud deploy
       "FAILED": 0,
       "REFUNDED": 0,
       "PROCESSING": 0,
-      "REFUND_PENDING": 0,
-      "PENDING": 0,
-      "REFUND_FAILED": 0
+      "PENDING": 0
     },
     "timestamp": "2026-10-19T16:28:32.015850127Z"
   }

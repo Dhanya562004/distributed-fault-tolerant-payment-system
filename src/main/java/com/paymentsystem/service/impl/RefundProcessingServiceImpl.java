@@ -8,6 +8,7 @@ import com.paymentsystem.entity.PaymentStatus;
 import com.paymentsystem.entity.PaymentTransaction;
 import com.paymentsystem.entity.RefundTransaction;
 import com.paymentsystem.entity.User;
+import com.paymentsystem.exception.CumulativeRefundLimitExceededException;
 import com.paymentsystem.exception.InvalidTransactionStateException;
 import com.paymentsystem.exception.ResourceNotFoundException;
 import com.paymentsystem.repository.PaymentTransactionRepository;
@@ -87,7 +88,7 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
                 .or(() -> paymentRepository.findByPaymentId(request.getPaymentId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Payment transaction not found for ID: " + request.getPaymentId()));
 
-        if (payment.getStatus() != PaymentStatus.SUCCESS && payment.getStatus() != PaymentStatus.REFUNDED) {
+        if (payment.getStatus() != PaymentStatus.SUCCESS) {
             throw new InvalidTransactionStateException("Cannot refund transaction in state [" + payment.getStatus() + "]. Only SUCCESS transactions are eligible for refund.");
         }
 
@@ -98,7 +99,7 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
 
         long newTotalRefunded = totalAlreadyRefunded + request.getAmount();
         if (newTotalRefunded > payment.getAmount()) {
-            throw new InvalidTransactionStateException("Refund amount [" + request.getAmount() + "] plus previous refunds [" + totalAlreadyRefunded + "] exceeds original payment amount [" + payment.getAmount() + "].");
+            throw new CumulativeRefundLimitExceededException("Refund amount [" + request.getAmount() + "] plus previous refunds [" + totalAlreadyRefunded + "] exceeds original payment amount [" + payment.getAmount() + "].");
         }
 
         String refundId = "REF_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();
@@ -114,8 +115,10 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
         refundRepository.save(refund);
 
         PaymentStatus prevStatus = payment.getStatus();
-        payment.setStatus(PaymentStatus.REFUNDED);
-        paymentRepository.save(payment);
+        if (newTotalRefunded == payment.getAmount()) {
+            payment.transitionTo(PaymentStatus.REFUNDED);
+            paymentRepository.save(payment);
+        }
 
         Optional<User> userOpt = userRepository.findByUserCodeForUpdate(payment.getUserId())
                 .or(() -> userRepository.findByUserCode(payment.getUserId()));
@@ -129,7 +132,7 @@ public class RefundProcessingServiceImpl implements RefundProcessingService {
                 request.getIdempotencyKey(),
                 payment.getUserId(),
                 prevStatus.name(),
-                PaymentStatus.REFUNDED.name(),
+                payment.getStatus().name(),
                 "PROCESS_REFUND",
                 "API_HANDLER",
                 "Refund of " + request.getAmount() + " processed successfully",

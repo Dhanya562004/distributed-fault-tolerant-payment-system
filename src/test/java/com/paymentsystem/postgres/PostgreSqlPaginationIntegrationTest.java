@@ -81,7 +81,7 @@ public class PostgreSqlPaginationIntegrationTest extends AbstractPostgreSqlInteg
                 "CREDIT_CARD",
                 "Pg Payment " + paymentId
         );
-        tx.setStatus(status);
+        com.paymentsystem.test.PaymentTestHelper.walkToState(tx, status);
         tx.setCreatedAt(createdAt);
         tx.setUpdatedAt(createdAt);
         return paymentRepository.saveAndFlush(tx);

@@ -175,7 +175,7 @@ public class PostgreSqlPessimisticLockingTest extends AbstractPostgreSqlIntegrat
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
-                p.setStatus(PaymentStatus.SUCCESS);
+                com.paymentsystem.test.PaymentTestHelper.walkToState(p, PaymentStatus.SUCCESS);
                 paymentTransactionRepository.saveAndFlush(p);
                 return null;
             });

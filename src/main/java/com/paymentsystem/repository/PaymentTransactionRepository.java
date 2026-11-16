@@ -27,6 +27,16 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     @Query("SELECT p FROM PaymentTransaction p WHERE p.paymentId = :paymentId")
     Optional<PaymentTransaction> findByPaymentIdForUpdate(@Param("paymentId") String paymentId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM PaymentTransaction p WHERE p.idempotencyKey = :idempotencyKey")
+    Optional<PaymentTransaction> findByIdempotencyKeyForUpdate(@Param("idempotencyKey") String idempotencyKey);
+
+    @Query("SELECT p FROM PaymentTransaction p WHERE p.status IN (:statuses) AND p.createdAt < :cutoff")
+    List<PaymentTransaction> findStuckPayments(
+            @Param("statuses") java.util.Collection<PaymentStatus> statuses,
+            @Param("cutoff") java.time.Instant cutoff
+    );
+
     @Query("SELECT COUNT(p) FROM PaymentTransaction p WHERE p.status = :status")
     long countByStatus(@Param("status") PaymentStatus status);
 }
