@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentsystem.dto.request.InitiatePaymentRequest;
 import com.paymentsystem.dto.response.PaymentResponse;
 import com.paymentsystem.entity.PaymentStatus;
+import com.paymentsystem.entity.PaymentTransaction;
 import com.paymentsystem.entity.User;
 import com.paymentsystem.repository.PaymentTransactionRepository;
 import com.paymentsystem.repository.UserRepository;
@@ -74,7 +75,12 @@ class PaymentProcessingServiceTest {
 
         when(idempotencyService.tryAcquireOrGet(key, req)).thenReturn(Optional.empty());
         when(userRepository.findByUserCode("USR_ALICE")).thenReturn(Optional.of(user));
-        when(paymentRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(paymentRepository.saveAndFlush(any())).thenAnswer(invocation -> {
+            PaymentTransaction tx = invocation.getArgument(0);
+            lenient().when(paymentRepository.findByPaymentId(tx.getPaymentId())).thenReturn(Optional.of(tx));
+            lenient().when(paymentRepository.findByPaymentIdForUpdate(tx.getPaymentId())).thenReturn(Optional.of(tx));
+            return tx;
+        });
 
         PaymentResponse response = paymentProcessingService.initiatePayment(req);
 
@@ -98,7 +104,12 @@ class PaymentProcessingServiceTest {
 
         when(idempotencyService.tryAcquireOrGet(key, req)).thenReturn(Optional.empty());
         when(userRepository.findByUserCode("USR_BOB")).thenReturn(Optional.of(user));
-        when(paymentRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(paymentRepository.saveAndFlush(any())).thenAnswer(invocation -> {
+            PaymentTransaction tx = invocation.getArgument(0);
+            lenient().when(paymentRepository.findByPaymentId(tx.getPaymentId())).thenReturn(Optional.of(tx));
+            lenient().when(paymentRepository.findByPaymentIdForUpdate(tx.getPaymentId())).thenReturn(Optional.of(tx));
+            return tx;
+        });
 
         PaymentResponse response = paymentProcessingService.initiatePayment(req);
 

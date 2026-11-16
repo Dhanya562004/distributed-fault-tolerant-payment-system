@@ -2,7 +2,7 @@
 
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-007396.svg?style=flat-square&logo=openjdk)](https://www.oracle.com/java/)
 [![Spring Boot 3.3.4](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F.svg?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
-[![Tests](https://img.shields.io/badge/Tests-143%20Passing%20(H2)-10B981.svg?style=flat-square)](docs/testing.md)
+[![Tests](https://img.shields.io/badge/Tests-149%20Passing%20(H2)-10B981.svg?style=flat-square)](docs/testing.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 [![AI Usage](https://img.shields.io/badge/AI%20Usage-Disclosure-8B5CF6.svg?style=flat-square)](AI_USAGE.md)
 
@@ -12,6 +12,7 @@ A fault-tolerant payment processing engine built with Java 17 and Spring Boot 3.
 
 ## What It Does
 
+- **Atomic Payment Commit & Transaction Boundary Correctness**: Guarantees that user balance deduction, payment status transition (`SUCCESS`), and transactional outbox event creation commit in **one single atomic database transaction** (`PaymentTransactionCoordinator.executePaymentAttempt`). This eliminates the critical failure mode where a server crash after balance deduction leaves money deducted with no corresponding success record or event. Reloads rows under pessimistic write lock (`SELECT FOR UPDATE`), isolates `PROCESSING` status commits into their own short transaction to prevent pool starvation and version conflicts, and ensures idempotent replays never double-charge. Verified in `AtomicPaymentCommitIntegrationTest`.
 - **API Key Authentication & Tenant Scoping**: Enforces API key authentication across all REST endpoints (via `X-Api-Key` or `Authorization: Bearer <key>`) against the `api_keys` table. Health probes (`/actuator/health`) and OpenAPI docs remain public. Idempotency keys are strictly scoped per API key `(api_key, key_value)`, allowing multi-tenant customers to safely reuse identical idempotency keys (e.g. `ORDER_100`) without collisions or cross-customer data leakage.
 - **End-to-End Request ID Tracing**: Attaches a unique `X-Request-Id` to every request (echoed in response headers), embedded into every SLF4J MDC log line (`[%X{requestId}]`), stored in `payments` and `outbox_events` tables, and propagated through background partition workers and outgoing webhook headers.
 - **Standardized Error Envelope & Uniform Keyset/List Pagination**: Consistent `{ "code": "...", "message": "...", "requestId": "..." }` error envelopes across all handlers. All list endpoints (`/api/v1/payments`, `/api/v1/payments/user/{userId}`, `/api/v1/payments/transactions`, `/api/v1/users`, `/api/v1/refunds/payment/{paymentId}`, `/api/v1/audit/logs`) return a standardized `{ "data": [...], "pagination": { "limit": ..., "hasMore": ..., "nextCursor": ... } }` response envelope.
@@ -78,8 +79,8 @@ Provisions the backend (`8080`), PostgreSQL (`5432`), MongoDB (`27017`), and Str
 ```bash
 mvn clean test
 ```
-Runs the 143 unit and integration tests (security filters, API key auth, scoped idempotency, request ID propagation, standardized errors, controllers, service logic, outbox workers, idempotency expiry, stuck-key recovery, queue partitioning, currency service, and pagination).
-- **Status**: 143 passed, 0 failures, 0 errors.
+Runs the 149 unit and integration tests (atomic payment commit, security filters, API key auth, scoped idempotency, request ID propagation, standardized errors, controllers, service logic, outbox workers, idempotency expiry, stuck-key recovery, queue partitioning, currency service, and pagination).
+- **Status**: 149 passed, 0 failures, 0 errors.
 
 ### 2. PostgreSQL 16 Testcontainers Suite (Requires Docker)
 ```bash

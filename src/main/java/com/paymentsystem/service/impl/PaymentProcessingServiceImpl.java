@@ -114,7 +114,8 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
         this.metricsService = metricsService;
         this.queueManager = queueManager;
         this.objectMapper = objectMapper;
-        this.paymentCoordinator = paymentCoordinator;
+        this.paymentCoordinator = paymentCoordinator != null ? paymentCoordinator :
+                new PaymentTransactionCoordinator(paymentRepository, null, userRepository, gatewaySimulationService, objectMapper, java.time.Clock.systemUTC());
         this.paginationService = paginationService;
         this.txTemplate = transactionManager != null ? new org.springframework.transaction.support.TransactionTemplate(transactionManager) : null;
     }
@@ -174,12 +175,14 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                 request.getDescription()
         );
         tx.setRequestId(requestId);
-        tx.setStatus(PaymentStatus.PROCESSING);
+        tx.setStatus(PaymentStatus.PENDING);
         paymentRepository.saveAndFlush(tx);
+
+        paymentCoordinator.commitPaymentProcessing(paymentId);
 
         auditService.recordAuditLog(
                 paymentId, request.getIdempotencyKey(), request.getUserId(),
-                "NONE", "PROCESSING", "SUBMIT_ASYNC_QUEUE", "API_HANDLER",
+                "PENDING", "PROCESSING", "SUBMIT_ASYNC_QUEUE", "API_HANDLER",
                 "Payment submitted to partition queue for background worker processing", Map.of()
         );
 
@@ -198,7 +201,8 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
 
         queueManager.publish(request.getUserId(), message);
 
-        PaymentResponse response = mapToResponse(tx);
+        PaymentTransaction current = paymentRepository.findByPaymentId(paymentId).orElse(tx);
+        PaymentResponse response = mapToResponse(current);
         response.setIsCachedIdempotentResponse(false);
         return response;
     }
@@ -224,9 +228,18 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                 "Initiating synchronous payment processing", Map.of()
         );
 
+        // Commit PROCESSING in its own isolated transaction before retry loop starts
+        paymentCoordinator.commitPaymentProcessing(paymentId);
+        auditService.recordAuditLog(
+                paymentId, request.getIdempotencyKey(), request.getUserId(),
+                "PENDING", "PROCESSING", "START_PAYMENT_PROCESSING", "API_HANDLER",
+                "Committed PROCESSING status before attempt loop", Map.of()
+        );
+
         int attempts = 0;
         boolean success = false;
         String lastError = null;
+        PaymentTransaction completedTx = null;
 
         while (attempts < MAX_RETRY_ATTEMPTS && !success) {
             attempts++;
@@ -238,68 +251,61 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                     Thread.sleep(backoffMs);
                 }
 
-                runInTransaction(() -> executeSinglePaymentAttempt(tx, request));
+                completedTx = paymentCoordinator.executePaymentAttempt(paymentId, request);
                 success = true;
 
             } catch (NonRetryableException ex) {
                 lastError = ex.getMessage();
                 logger.warn("[NON-RETRYABLE FAILURE] Payment {} failed fast with business error: {}", paymentId, ex.getMessage());
+                paymentCoordinator.recordAttemptFailure(paymentId, attempts, lastError);
                 break;
             } catch (RetryableException ex) {
                 lastError = ex.getMessage();
                 logger.warn("[ATTEMPT {}/{}] Retryable payment failure for {}: {}", attempts, MAX_RETRY_ATTEMPTS, paymentId, ex.getMessage());
+                paymentCoordinator.recordAttemptFailure(paymentId, attempts, lastError);
             } catch (PaymentProcessingException ex) {
                 lastError = ex.getMessage();
                 logger.warn("[ATTEMPT {}/{}] Payment processing failure for {}: {}", attempts, MAX_RETRY_ATTEMPTS, paymentId, ex.getMessage());
+                paymentCoordinator.recordAttemptFailure(paymentId, attempts, lastError);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 lastError = "Execution interrupted";
+                paymentCoordinator.recordAttemptFailure(paymentId, attempts, lastError);
                 break;
             } catch (Exception ex) {
                 lastError = ex.getMessage();
                 logger.error("Unexpected error during attempt {} for payment {}: {}", attempts, paymentId, ex.getMessage(), ex);
+                paymentCoordinator.recordAttemptFailure(paymentId, attempts, lastError);
             }
         }
 
-        tx.setRetryCount(attempts - 1);
         long latencyMs = System.currentTimeMillis() - startTime;
         metricsService.recordLatency(latencyMs);
 
-        if (success) {
-            if (paymentCoordinator != null) {
-                paymentCoordinator.commitPaymentSuccess(tx);
-            } else {
-                tx.setStatus(PaymentStatus.SUCCESS);
-                paymentRepository.saveAndFlush(tx);
-            }
+        int retryCount = Math.max(0, attempts - 1);
+        if (success && completedTx != null) {
             metricsService.incrementSuccessfulTransactions();
 
             auditService.recordAuditLog(
                     paymentId, request.getIdempotencyKey(), request.getUserId(),
-                    "PENDING", "SUCCESS", "PAYMENT_AUTHORIZED", "WORKER_DIRECT",
+                    "PROCESSING", "SUCCESS", "PAYMENT_AUTHORIZED", "WORKER_DIRECT",
                     "Payment successfully authorized after " + attempts + " attempt(s)", Map.of("latencyMs", latencyMs)
             );
 
-            PaymentResponse response = mapToResponse(tx);
+            PaymentResponse response = mapToResponse(completedTx);
             idempotencyService.markCompleted(request.getIdempotencyKey(), response, 200);
             return response;
         } else {
-            if (paymentCoordinator != null) {
-                paymentCoordinator.commitPaymentFailure(tx, lastError);
-            } else {
-                tx.setStatus(PaymentStatus.FAILED);
-                tx.setFailureReason(lastError);
-                paymentRepository.saveAndFlush(tx);
-            }
+            PaymentTransaction failedTx = paymentCoordinator.commitPaymentFailure(paymentId, lastError, retryCount);
             metricsService.incrementFailedTransactions();
 
             auditService.recordAuditLog(
                     paymentId, request.getIdempotencyKey(), request.getUserId(),
-                    "PENDING", "FAILED", "PAYMENT_REJECTED", "WORKER_DIRECT",
-                    "Payment failed after " + attempts + " attempt(s). Reason: " + lastError, Map.of("retryCount", attempts - 1)
+                    "PROCESSING", "FAILED", "PAYMENT_REJECTED", "WORKER_DIRECT",
+                    "Payment failed after " + attempts + " attempt(s). Reason: " + lastError, Map.of("retryCount", retryCount)
             );
 
-            PaymentResponse response = mapToResponse(tx);
+            PaymentResponse response = mapToResponse(failedTx);
             idempotencyService.markCompleted(request.getIdempotencyKey(), response, 500);
             return response;
         }
@@ -338,8 +344,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
         }
         try {
             logger.info("[WORKER {}] Processing event {} for payment {}", workerId, message.getEventId(), message.getPaymentId());
-            Optional<PaymentTransaction> txOpt = paymentRepository.findByPaymentIdForUpdate(message.getPaymentId())
-                    .or(() -> paymentRepository.findByPaymentId(message.getPaymentId()));
+            Optional<PaymentTransaction> txOpt = paymentRepository.findByPaymentId(message.getPaymentId());
             if (txOpt.isEmpty()) {
                 logger.error("Worker could not find transaction record for paymentId: {}", message.getPaymentId());
                 return false;
@@ -348,6 +353,10 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
             PaymentTransaction tx = txOpt.get();
             if (tx.getStatus() == PaymentStatus.SUCCESS || tx.getStatus() == PaymentStatus.FAILED) {
                 logger.info("Payment {} is already in terminal state {}, skipping worker duplicate execution", tx.getPaymentId(), tx.getStatus());
+                if (tx.getStatus() == PaymentStatus.SUCCESS) {
+                    PaymentResponse response = mapToResponse(tx);
+                    idempotencyService.markCompleted(message.getApiKey() != null ? message.getApiKey() : RequestContext.getApiKey(), tx.getIdempotencyKey(), response, 200);
+                }
                 return true;
             }
 
@@ -361,13 +370,7 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
             );
 
             try {
-                runInTransaction(() -> executeSinglePaymentAttempt(tx, req));
-                if (paymentCoordinator != null) {
-                    paymentCoordinator.commitPaymentSuccess(tx);
-                } else {
-                    tx.setStatus(PaymentStatus.SUCCESS);
-                    paymentRepository.saveAndFlush(tx);
-                }
+                PaymentTransaction completedTx = paymentCoordinator.executePaymentAttempt(message.getPaymentId(), req);
                 metricsService.incrementSuccessfulTransactions();
 
                 auditService.recordAuditLog(
@@ -376,27 +379,17 @@ public class PaymentProcessingServiceImpl implements PaymentProcessingService {
                         "Payment authorized by worker pool", Map.of()
                 );
 
-                PaymentResponse response = mapToResponse(tx);
+                PaymentResponse response = mapToResponse(completedTx);
                 idempotencyService.markCompleted(message.getApiKey() != null ? message.getApiKey() : RequestContext.getApiKey(), tx.getIdempotencyKey(), response, 200);
                 return true;
 
             } catch (PaymentProcessingException ex) {
                 logger.warn("[WORKER {}] Payment processing exception for {}: {}", workerId, tx.getPaymentId(), ex.getMessage());
-                if (paymentCoordinator != null) {
-                    paymentCoordinator.commitPaymentFailure(tx, ex.getMessage());
-                } else {
-                    tx.setFailureReason(ex.getMessage());
-                    paymentRepository.saveAndFlush(tx);
-                }
+                paymentCoordinator.recordAttemptFailure(message.getPaymentId(), message.getAttemptCount(), ex.getMessage());
                 return false;
             } catch (Exception ex) {
                 logger.error("[WORKER {}] Unexpected failure processing payment {}: {}", workerId, tx.getPaymentId(), ex.getMessage(), ex);
-                if (paymentCoordinator != null) {
-                    paymentCoordinator.commitPaymentFailure(tx, ex.getMessage());
-                } else {
-                    tx.setFailureReason(ex.getMessage());
-                    paymentRepository.saveAndFlush(tx);
-                }
+                paymentCoordinator.recordAttemptFailure(message.getPaymentId(), message.getAttemptCount(), ex.getMessage());
                 return false;
             }
         } finally {

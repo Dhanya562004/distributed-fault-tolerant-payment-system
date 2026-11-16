@@ -86,13 +86,13 @@ The human project owner directed and governed the development lifecycle:
 
 ### Reported Automated Test Results
 
-The repository test suite consists of **181 total automated tests** across 27 test classes, structured into two execution tiers:
+The repository test suite consists of **187 total automated tests** across 28 test classes, structured into two execution tiers:
 
 | Test Execution Stage | Environment | Test Count | Status | Verified Evidence |
 | :--- | :--- | :---: | :---: | :--- |
-| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 143 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` (143 tests passed in 01:24 min). |
-| **Stage B: Concurrency & Real Database** | PostgreSQL 16 Testcontainers (Docker) | 38 | **Configured** (Docker-dependent) | 38 tests across 6 classes (including 3 stuck-key recovery tests in `PostgreSqlIdempotencyTest`). Requires running Docker daemon (`mvn test -Ppostgres-it`). |
-| **Total Automated Suite** | Combined | **181** | **143 Passing locally (Docker-free), 38 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
+| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 149 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` (149 tests passed in 01:07 min). |
+| **Stage B: Concurrency & Real Database** | PostgreSQL 16 Testcontainers (Docker) | 38 | **Configured** (Docker-dependent) | 38 tests across 6 classes (including 3 stuck-key recovery tests in `PostgreSqlIdempotencyTest` and atomic commit tests in `PostgreSqlAtomicPaymentCommitIntegrationTest`). Requires running Docker daemon (`mvn test -Ppostgres-it`). |
+| **Total Automated Suite** | Combined | **187** | **149 Passing locally (Docker-free), 38 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
 
 ### Concurrency Stress Benchmark
 - **Test Implementation:** `ConcurrentPaymentTest` (H2) and `PostgreSqlConcurrencyStressTest` (PostgreSQL 16).
@@ -172,6 +172,31 @@ Transparency regarding AI-assisted development requires acknowledging key techni
 4. **MockMvc Authentication Rejection in Integration Tests**:
    - *Mistake*: Adding `ApiKeyAuthenticationFilter` across the entire application context caused unauthenticated MockMvc requests in `PaymentLifecycleIntegrationTest`, `TransactionalOutboxIntegrationTest`, and `IdempotencyExpiryAndReplayTest` to return 401 Unauthorized.
    - *Correction*: Updated test suites to explicitly supply `X-Api-Key: apexpay_admin_secret_key_2026` across all integration requests, while verifying `X-Request-Id` headers and standardized error envelopes. All 143 fast tests pass with 0 errors.
+
+### Phase 4 PR 1A AI Mistakes and Corrections Log
+1. **Missing Package Import (`PaymentTransactionCoordinator.java`)**:
+   - *Mistake*: When implementing `PaymentTransactionCoordinator`, the import statement `import java.util.Optional;` was omitted.
+   - *Impact*: Maven compilation failed with `cannot find symbol: class Optional`.
+   - *Correction*: Added `import java.util.Optional;` to `PaymentTransactionCoordinator.java`.
+2. **Missing Entity Import in Test Classes (`PaymentProcessingServiceTest.java`, `FaultToleranceRetryTest.java`)**:
+   - *Mistake*: Test refactoring in `PaymentProcessingServiceTest` and `FaultToleranceRetryTest` referenced `PaymentTransaction` in mock answers without an explicit import.
+   - *Impact*: Compilation failed with `cannot find symbol: class PaymentTransaction`.
+   - *Correction*: Added `import com.paymentsystem.entity.PaymentTransaction;` to both test classes.
+3. **Unstubbed Mockito Repository Reads in Unit Tests**:
+   - *Mistake*: Refactored `PaymentProcessingServiceImpl` calls `paymentCoordinator.executePaymentAttempt`, which loads the payment row using `paymentRepository.findByPaymentId(...)` and `findByPaymentIdForUpdate(...)`. Existing unit test mocks only stubbed `save(...)` and `saveAndFlush(...)`, causing `ResourceNotFound: Payment not found for ID`.
+   - *Correction*: Added lenient stubs for `findByPaymentId` and `findByPaymentIdForUpdate` returning the tracked `PaymentTransaction` instance in mock setups.
+4. **Retry Count Off-By-One on Business Failure**:
+   - *Mistake*: In `PaymentProcessingServiceImpl`, on fail-fast business errors (such as insufficient funds), `attempts` (which was 1) was directly passed as `retryCount`, causing `testInitiatePayment_InsufficientBalance` to assert `expected: <0> but was: <1>`.
+   - *Correction*: Properly computed `retryCount` as `Math.max(0, attempts - 1)`.
+5. **JPA Pessimistic Write Lock Outside Active Transaction in Async Worker**:
+   - *Mistake*: In `processWorkerMessage`, an initial idempotency / status check called `paymentRepository.findByPaymentIdForUpdate(...)` before delegating to the transaction coordinator. Because `processWorkerMessage` does not carry an outer `@Transactional` annotation (to prevent holding open database connections during retry delays), Hibernate threw `InvalidDataAccessApiUsageException: Query requires transaction be in progress`.
+   - *Correction*: Switched the non-transactional pre-check to read via non-locking `paymentRepository.findByPaymentId(...)`, letting the pessimistic row lock `SELECT FOR UPDATE` execute inside `PaymentTransactionCoordinator.executePaymentAttempt` at the start of the attempt transaction.
+6. **Payload Hash Mismatch in Crash Recovery Replay Test**:
+   - *Mistake*: In `AtomicPaymentCommitIntegrationTest`, `testCrashBetweenPaymentCommitAndKeyUpdate` created a manual idempotency key with a hardcoded `"hash123"` payload hash. When replaying the request via MockMvc, `idempotencyService` computed the real SHA-256 hash of the request body and detected a mismatch, returning HTTP 409 `PAYLOAD_MISMATCH` instead of HTTP 201 cached replay.
+   - *Correction*: Calculated the expected hash using `idempotencyService.computePayloadHash(payReq)` when seeding the key record.
+7. **Gateway Transient Failure Simulation Race in Retry Test**:
+   - *Mistake*: `testAttempt1FailsAfterDeduction_Attempt2Succeeds_BalanceDeductedOnce` initially used a background thread with `Thread.sleep(600)` to reset gateway behavior, creating timing sensitivity across varying machine load.
+   - *Correction*: Replaced asynchronous timing with a deterministic Mockito spy: `doThrow(new ServiceUnavailableException(...)).doNothing().when(gatewaySimulationService).simulateGatewayCall(...)`.
 
 ---
 
