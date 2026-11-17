@@ -1,14 +1,15 @@
 package com.paymentsystem.service;
+import com.paymentsystem.payment.PaymentProcessingService;
 
 import com.paymentsystem.dto.request.InitiatePaymentRequest;
 import com.paymentsystem.dto.response.PaymentResponse;
-import com.paymentsystem.entity.IdempotencyKeyRecord;
-import com.paymentsystem.entity.PaymentStatus;
-import com.paymentsystem.entity.PaymentTransaction;
+import com.paymentsystem.idempotency.IdempotencyKeyRecord;
+import com.paymentsystem.payment.PaymentStatus;
+import com.paymentsystem.payment.PaymentTransaction;
 import com.paymentsystem.entity.User;
 import com.paymentsystem.exception.DuplicateRequestException;
-import com.paymentsystem.repository.IdempotencyKeyRepository;
-import com.paymentsystem.repository.PaymentTransactionRepository;
+import com.paymentsystem.idempotency.IdempotencyKeyRepository;
+import com.paymentsystem.payment.PaymentTransactionRepository;
 import com.paymentsystem.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

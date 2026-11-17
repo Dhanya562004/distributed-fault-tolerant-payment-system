@@ -1,8 +1,9 @@
 package com.paymentsystem.service.impl;
 
 import com.paymentsystem.dto.response.SystemMetricsResponse;
-import com.paymentsystem.entity.PaymentStatus;
-import com.paymentsystem.repository.PaymentTransactionRepository;
+import com.paymentsystem.payment.PaymentStatus;
+import com.paymentsystem.payment.PaymentTransactionRepository;
+import com.paymentsystem.ledger.LedgerReconciliationService;
 import com.paymentsystem.service.MetricsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -31,7 +32,7 @@ public class MetricsServiceImpl implements MetricsService {
     private PaymentTransactionRepository paymentTransactionRepository;
 
     @Autowired(required = false)
-    private com.paymentsystem.service.LedgerReconciliationService ledgerReconciliationService;
+    private LedgerReconciliationService ledgerReconciliationService;
 
     @org.springframework.beans.factory.annotation.Value("${app.ledger.enabled:true}")
     private boolean ledgerEnabled = true;

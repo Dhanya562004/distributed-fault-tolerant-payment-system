@@ -1,7 +1,7 @@
 package com.paymentsystem.test;
 
-import com.paymentsystem.entity.PaymentStatus;
-import com.paymentsystem.entity.PaymentTransaction;
+import com.paymentsystem.payment.PaymentStatus;
+import com.paymentsystem.payment.PaymentTransaction;
 
 import java.util.UUID;
 

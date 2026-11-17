@@ -5,22 +5,22 @@ import com.paymentsystem.dto.request.InitiatePaymentRequest;
 import com.paymentsystem.dto.request.ProcessRefundRequest;
 import com.paymentsystem.dto.response.PaymentResponse;
 import com.paymentsystem.dto.response.ReconciliationResult;
-import com.paymentsystem.entity.EntrySide;
-import com.paymentsystem.entity.LedgerEntry;
-import com.paymentsystem.entity.LedgerEntryType;
-import com.paymentsystem.entity.PaymentStatus;
-import com.paymentsystem.entity.PaymentTransaction;
+import com.paymentsystem.ledger.EntrySide;
+import com.paymentsystem.ledger.LedgerEntry;
+import com.paymentsystem.ledger.LedgerEntryType;
+import com.paymentsystem.payment.PaymentStatus;
+import com.paymentsystem.payment.PaymentTransaction;
 import com.paymentsystem.entity.User;
 import com.paymentsystem.exception.ServiceUnavailableException;
-import com.paymentsystem.repository.LedgerEntryRepository;
-import com.paymentsystem.repository.PaymentTransactionRepository;
+import com.paymentsystem.ledger.LedgerEntryRepository;
+import com.paymentsystem.payment.PaymentTransactionRepository;
 import com.paymentsystem.repository.UserRepository;
 import com.paymentsystem.runner.LedgerOpeningBalanceBackfillRunner;
 import com.paymentsystem.service.GatewaySimulationService;
-import com.paymentsystem.service.LedgerReconciliationService;
-import com.paymentsystem.service.PaymentProcessingService;
-import com.paymentsystem.service.PaymentTransactionCoordinator;
-import com.paymentsystem.service.RefundProcessingService;
+import com.paymentsystem.ledger.LedgerReconciliationService;
+import com.paymentsystem.payment.PaymentProcessingService;
+import com.paymentsystem.payment.PaymentTransactionCoordinator;
+import com.paymentsystem.payment.RefundProcessingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -394,11 +394,12 @@ public class LedgerDoubleEntryIntegrationTest {
         long corruptAmount = 99999L;
 
         try {
-            // Insert an unbalanced DEBIT row directly via plain SQL (no matching CREDIT)
+            // Insert an unbalanced DEBIT row directly via plain SQL (no matching CREDIT) with explicit past timestamp
+            java.sql.Timestamp pastTimestamp = java.sql.Timestamp.from(java.time.Instant.now().minusSeconds(10));
             jdbcTemplate.update("""
                     INSERT INTO ledger_entries (entry_id, transaction_id, entry_type, account_id, entry_side, amount, currency, description, created_at)
-                    VALUES (?, ?, 'PAYMENT', 'CORRUPT_ACCT', 'DEBIT', ?, 'EUR', 'Unbalanced corrupt row', CURRENT_TIMESTAMP)
-                    """, "LED_CORRUPT_" + UUID.randomUUID(), corruptTxId, corruptAmount);
+                    VALUES (?, ?, 'PAYMENT', 'CORRUPT_ACCT', 'DEBIT', ?, 'EUR', 'Unbalanced corrupt row', ?)
+                    """, "LED_CORRUPT_" + UUID.randomUUID(), corruptTxId, corruptAmount, pastTimestamp);
 
             ReconciliationResult audit = reconciliationService.runReconciliation(Duration.ZERO);
             assertFalse(audit.isBalanced(), "Reconciliation must fail when debits != credits for currency EUR");

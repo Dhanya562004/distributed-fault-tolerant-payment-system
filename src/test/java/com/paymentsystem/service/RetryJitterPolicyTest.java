@@ -1,4 +1,5 @@
 package com.paymentsystem.service;
+import com.paymentsystem.payment.RetryJitterPolicy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -73,5 +74,10 @@ class RetryJitterPolicyTest {
         assertEquals(0, policy.calculateFullJitterDelay(1, 0, 8000));
         assertEquals(0, policy.calculateFullJitterDelay(1, 500, 0));
         assertEquals(0, policy.calculateFullJitterDelay(1, -500, 8000));
+        assertEquals(0, policy.calculateFullJitterDelay(1, 500, -8000));
+
+        RetryJitterPolicy nullSupplier = new RetryJitterPolicy(null);
+        long d = nullSupplier.calculateFullJitterDelay(1, 500, 8000);
+        assertTrue(d >= 0 && d <= 8000);
     }
 }

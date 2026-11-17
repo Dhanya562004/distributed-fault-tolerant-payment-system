@@ -1,12 +1,13 @@
 package com.paymentsystem.controller;
+import com.paymentsystem.payment.PaymentController;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentsystem.dto.response.PagedPaymentResponse;
 import com.paymentsystem.dto.response.PaginationMetadata;
 import com.paymentsystem.dto.response.PaymentTransactionResponse;
-import com.paymentsystem.entity.PaymentStatus;
+import com.paymentsystem.payment.PaymentStatus;
 import com.paymentsystem.exception.*;
-import com.paymentsystem.service.PaymentProcessingService;
+import com.paymentsystem.payment.PaymentProcessingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -1,6 +1,6 @@
 package com.paymentsystem.dto.response;
 
-import com.paymentsystem.entity.PaymentStatus;
+import com.paymentsystem.payment.PaymentStatus;
 
 import java.time.Instant;
 

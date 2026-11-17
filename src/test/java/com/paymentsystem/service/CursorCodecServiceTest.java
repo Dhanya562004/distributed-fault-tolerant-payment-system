@@ -1,9 +1,10 @@
 package com.paymentsystem.service;
+import com.paymentsystem.payment.CursorCodecService;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.paymentsystem.dto.CursorPayload;
-import com.paymentsystem.entity.PaymentStatus;
+import com.paymentsystem.payment.PaymentStatus;
 import com.paymentsystem.exception.InvalidCursorException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

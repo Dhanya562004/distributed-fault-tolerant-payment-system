@@ -1,17 +1,20 @@
 package com.paymentsystem.postgres;
+import com.paymentsystem.payment.PaymentTransaction;
+import com.paymentsystem.payment.PaymentStatus;
+import com.paymentsystem.outbox.OutboxEvent;
 
 import com.paymentsystem.dto.request.InitiatePaymentRequest;
 import com.paymentsystem.dto.response.PagedPaymentResponse;
 import com.paymentsystem.dto.response.PaymentResponse;
 import com.paymentsystem.entity.*;
 import com.paymentsystem.exception.InvalidCursorException;
-import com.paymentsystem.repository.IdempotencyKeyRepository;
-import com.paymentsystem.repository.OutboxEventRepository;
-import com.paymentsystem.repository.PaymentTransactionRepository;
+import com.paymentsystem.idempotency.IdempotencyKeyRepository;
+import com.paymentsystem.outbox.OutboxEventRepository;
+import com.paymentsystem.payment.PaymentTransactionRepository;
 import com.paymentsystem.repository.UserRepository;
-import com.paymentsystem.service.CursorCodecService;
-import com.paymentsystem.service.PaymentPaginationService;
-import com.paymentsystem.service.PaymentProcessingService;
+import com.paymentsystem.payment.CursorCodecService;
+import com.paymentsystem.payment.PaymentPaginationService;
+import com.paymentsystem.payment.PaymentProcessingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -1,9 +1,9 @@
 package com.paymentsystem.postgres;
 
-import com.paymentsystem.entity.PaymentStatus;
-import com.paymentsystem.entity.PaymentTransaction;
+import com.paymentsystem.payment.PaymentStatus;
+import com.paymentsystem.payment.PaymentTransaction;
 import com.paymentsystem.entity.User;
-import com.paymentsystem.repository.PaymentTransactionRepository;
+import com.paymentsystem.payment.PaymentTransactionRepository;
 import com.paymentsystem.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

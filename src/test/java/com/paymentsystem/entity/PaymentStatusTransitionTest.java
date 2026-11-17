@@ -1,4 +1,6 @@
 package com.paymentsystem.entity;
+import com.paymentsystem.payment.PaymentTransaction;
+import com.paymentsystem.payment.PaymentStatus;
 
 import com.paymentsystem.exception.InvalidTransactionStateException;
 import com.paymentsystem.test.PaymentTestHelper;

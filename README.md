@@ -2,7 +2,7 @@
 
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-007396.svg?style=flat-square&logo=openjdk)](https://www.oracle.com/java/)
 [![Spring Boot 3.3.4](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F.svg?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
-[![Tests](https://img.shields.io/badge/Tests-191%20Passing%20(H2)-10B981.svg?style=flat-square)](docs/testing.md)
+[![Tests](https://img.shields.io/badge/Tests-262%20Passing%20(H2)-10B981.svg?style=flat-square)](docs/testing.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 [![AI Usage](https://img.shields.io/badge/AI%20Usage-Disclosure-8B5CF6.svg?style=flat-square)](AI_USAGE.md)
 
@@ -73,6 +73,38 @@ docker-compose up --build
 ```
 Provisions the backend (`8080`), PostgreSQL (`5432`), MongoDB (`27017`), and Streamlit dashboard (`8501`).
 
+### 4. Deploying with Real Managed PostgreSQL (Neon, Supabase, or Render)
+The application natively supports real PostgreSQL for production deployments via `src/main/resources/application-prod.yml` and `CloudPostgresEnvironmentPostProcessor`.
+
+#### Required Manual Setup (Operator Steps)
+Because cloud database accounts, connection strings, and API secrets contain sensitive credentials, **no secrets are stored in this repository**. You must provision your cloud database and configure environment variables in your hosting provider's dashboard manually:
+
+1. **Create a Managed PostgreSQL Instance**:
+   - **Neon** ([neon.tech](https://neon.tech)): Create a serverless PostgreSQL database and copy the connection URI (e.g., `postgresql://alex:Abc123xyz@ep-cool-fog-12345.us-east-2.aws.neon.tech/neondb?sslmode=require`).
+   - **Supabase** ([supabase.com](https://supabase.com)): Create a project and obtain the database connection pooler / direct connection string.
+   - **Render PostgreSQL** ([render.com](https://render.com)): Provision a managed PostgreSQL instance and copy the `External Database URL`.
+
+2. **Configure Environment Variables in Hosting Dashboard**:
+   In your hosting service settings (Render Dashboard, Railway, AWS ECS, or Kubernetes Secrets), configure:
+   ```env
+   # Mandatory: Active production profile
+   SPRING_PROFILES_ACTIVE=prod
+
+   # Mandatory: Cloud PostgreSQL connection URI (auto-parsed and normalized by CloudPostgresEnvironmentPostProcessor)
+   DATABASE_URL=postgresql://<username>:<password>@<host>:<port>/<database>?sslmode=require
+
+   # Security & Verification Secrets
+   WEBHOOK_SIGNING_SECRET=whsec_your_production_hmac_secret_here
+   API_KEY_DEFAULT_TOKEN=live_sec_your_tenant_api_key_here
+   LEDGER_ENABLED=true
+   ```
+   > [!IMPORTANT]
+   > `CloudPostgresEnvironmentPostProcessor` automatically normalizes URI schemes (`postgresql://` to `jdbc:postgresql://`), URL-decodes passwords with special characters, enables SSL modes, and configures the HikariCP connection pool.
+   > If preferred, you can alternatively set standard Spring Boot properties: `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD`.
+
+3. **Flyway Database Migration**:
+   On application startup, Flyway automatically applies baseline migrations (`V1__initial_schema.sql` and `V2__seed_initial_data.sql`), creating all tables, indexes, constraints, and initial ledger accounts on your PostgreSQL instance.
+
 ---
 
 ## How to Test It
@@ -81,8 +113,8 @@ Provisions the backend (`8080`), PostgreSQL (`5432`), MongoDB (`27017`), and Str
 ```bash
 mvn clean test
 ```
-Runs the 191 unit and integration tests (double-entry ledger debit/credit matching, SQL reconciliation audits, append-only immutability, finite state machine transitions, cumulative refund limit checks, atomic payment commit, security filters, API key auth, scoped idempotency, request ID propagation, standardized errors, controllers, service logic, outbox workers, idempotency expiry, stuck-key recovery, queue partitioning, currency service, and pagination).
-- **Status**: 191 passed, 0 failures, 0 errors.
+Runs the 262 unit and integration tests (double-entry ledger debit/credit matching, SQL reconciliation audits, append-only immutability, finite state machine transitions, cumulative refund limit checks, atomic payment commit, security filters, API key auth, scoped idempotency, request ID propagation, standardized errors, controllers, service logic, outbox workers, idempotency expiry, stuck-key recovery, queue partitioning, currency service, and pagination).
+- **Status**: 262 passed, 0 failures, 0 errors.
 
 ### 2. PostgreSQL 16 Testcontainers Suite (Requires Docker)
 ```bash
@@ -160,10 +192,18 @@ docker run --rm -v "${PWD}/scripts:/scripts" grafana/k6 run \
 
 - **Correctness Guarantees**: Across all 3,000 requests, 100% of responses returned HTTP 201 (`SUCCESS`), 100% of duplicate replays were served idempotently from cache with `Idempotent-Replayed: true` without double balance deductions, and post-test SQL reconciliation confirmed zero double-entry ledger mismatches (`reconciliationStatus: "BALANCED"`, `ledgerMismatchCount: 0`).
 
-### 5. Test Coverage
+### 5. Automated Test Coverage & CI Enforcement
 Measured with JaCoCo (`mvn test jacoco:report`):
-- **Line Coverage**: 69.1% (1,759 / 2,546 lines covered)
-- **Branch Coverage**: 61.5% (380 / 618 branches covered)
+- **Core Package Coverage** (Enforced >= 80% Line and >= 80% Branch in CI via `mvn jacoco:check`):
+  | Package | Purpose | Line Coverage | Branch Coverage | Threshold | CI Status |
+  | :--- | :--- | :---: | :---: | :---: | :---: |
+  | `com.paymentsystem.ledger` | Double-entry ledger, append-only immutability, SQL reconciliation | **96.26%** (180/187) | **94.12%** (64/68) | >= 80% | **PASSED** |
+  | `com.paymentsystem.idempotency` | Cryptographic SHA-256 idempotency, atomic replay, stuck key recovery | **94.44%** (255/270) | **80.36%** (90/112) | >= 80% | **PASSED** |
+  | `com.paymentsystem.outbox` | Transactional outbox, signed webhooks, SSRF firewall, worker lease | **90.81%** (563/620) | **88.81%** (238/268) | >= 80% | **PASSED** |
+  | `com.paymentsystem.payment` | State machine transitions, atomic payment commit, refund logic | **88.31%** (846/958) | **80.46%** (280/348) | >= 80% | **PASSED** |
+
+- **Total Suite Execution**: **262 tests passed, 0 failures, 0 errors, 0 skipped**.
+- **CI Enforcement**: The Maven build strictly binds `jacoco:check` to the `verify` phase (`mvn verify`). If any of the four core payment packages drops below 80% line or branch coverage, the build and CI pipeline immediately fail.
 
 ---
 
@@ -220,7 +260,7 @@ If a production incident, database performance bottleneck, or unforeseen ledger 
 
 ## Known Limits
 
-- **Demo Persistence**: The public Render deployment uses an in-memory H2 database (`MODE=PostgreSQL`). Data does not persist across service restarts or free-tier sleep cycles. A PostgreSQL configuration is provided in `application-prod.yml`.
+- **Demo Persistence**: The public Render demonstration tier uses an in-memory H2 database (`MODE=PostgreSQL`) for zero-cost public showcase, so demonstration records do not persist across idle shutdowns. Production deployments natively connect to managed PostgreSQL instances (Neon, Supabase, Render Postgres) via the `prod` profile with Flyway migrations.
 - **In-Memory Partition Queues**: Worker queues are held in memory (`LinkedBlockingQueue`) inside a single JVM instance. If the application crashes, any payments waiting in the in-memory queue are lost (they remain in `PROCESSING` state in the database, with their idempotency key in `IN_PROGRESS` until the stuck-key recovery job marks them `FAILED`). Furthermore, per-user FIFO ordering is preserved only within a single application instance; multiple instances would race independently unless partitioned at an external message broker or database lock level.
 - **Synthetic Banking Rails**: Payment authorization calls are handled by an internal simulator (`GatewaySimulationServiceImpl`) with configurable latency and error rates, not live banking networks.
 - **Educational Scope**: This project is an architectural reference and demonstration. It is not PCI-DSS certified and should not be used to process real monetary transactions.

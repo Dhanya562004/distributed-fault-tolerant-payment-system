@@ -1,12 +1,13 @@
 package com.paymentsystem.controller;
+import com.paymentsystem.payment.RefundController;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentsystem.dto.request.ProcessRefundRequest;
 import com.paymentsystem.dto.response.RefundResponse;
-import com.paymentsystem.entity.PaymentStatus;
+import com.paymentsystem.payment.PaymentStatus;
 import com.paymentsystem.exception.GlobalExceptionHandler;
 import com.paymentsystem.exception.InvalidTransactionStateException;
-import com.paymentsystem.service.RefundProcessingService;
+import com.paymentsystem.payment.RefundProcessingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

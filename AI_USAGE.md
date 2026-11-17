@@ -86,13 +86,20 @@ The human project owner directed and governed the development lifecycle:
 
 ### Reported Automated Test Results
 
-The repository test suite consists of **232 total automated tests** across 35 test classes, structured into two execution tiers:
+The repository test suite consists of **304 total automated tests** across 40 test classes, structured into two execution tiers:
 
 | Test Execution Stage | Environment | Test Count | Status | Verified Evidence |
 | :--- | :--- | :---: | :---: | :--- |
-| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 191 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` (191 tests passed in 01:23 min). |
+| **Stage A: Fast Unit & Integration** | In-Memory H2 (Docker-Free) | 262 | **PASSED** (0 failures, 0 errors, 0 skipped) | Verified via `mvn clean test` (262 tests passed in 01:48 min). |
 | **Stage B: Concurrency & Real Database** | PostgreSQL 16 Testcontainers (Docker) | 42 | **Configured** (Docker-dependent) | 42 tests across 8 classes (including double-entry ledger verification in `PostgreSqlLedgerIntegrationTest`, `PostgreSqlRefundConcurrencyTest`, `PostgreSqlIdempotencyTest`, and `PostgreSqlAtomicPaymentCommitIntegrationTest`). Requires running Docker daemon (`mvn test -Ppostgres-it`). |
-| **Total Automated Suite** | Combined | **233** | **191 Passing locally (Docker-free), 42 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
+| **Total Automated Suite** | Combined | **304** | **262 Passing locally (Docker-free), 42 PostgreSQL-ready** | Verified local H2 pass; containerized suite executes in CI with Docker. |
+
+- **Package-Level Coverage Enforcement (Phase 7)**:
+  - `com.paymentsystem.ledger`: **96.26% Line, 94.12% Branch**
+  - `com.paymentsystem.idempotency`: **94.44% Line, 80.36% Branch**
+  - `com.paymentsystem.outbox`: **90.81% Line, 88.81% Branch**
+  - `com.paymentsystem.payment`: **88.31% Line, 80.46% Branch**
+  - Enforced in CI via `mvn jacoco:check` bound to `verify` phase (fails build if any core package drops below 80%).
 
 ### Concurrency Stress Benchmark (In-Process Only)
 - **Test Implementation:** `ConcurrentPaymentTest` (H2) and `PostgreSqlConcurrencyStressTest` (PostgreSQL 16).

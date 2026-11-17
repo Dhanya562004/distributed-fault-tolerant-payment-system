@@ -2,8 +2,8 @@ package com.paymentsystem.controller;
 
 import com.paymentsystem.dto.request.SimulationConfigRequest;
 import com.paymentsystem.service.GatewaySimulationService;
-import com.paymentsystem.worker.DistributedQueueManager;
-import com.paymentsystem.worker.EventMessage;
+import com.paymentsystem.outbox.DistributedQueueManager;
+import com.paymentsystem.outbox.EventMessage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -1,21 +1,22 @@
 package com.paymentsystem.postgres;
+import com.paymentsystem.ledger.LedgerEntryType;
 
 import com.paymentsystem.dto.request.InitiatePaymentRequest;
 import com.paymentsystem.dto.request.ProcessRefundRequest;
 import com.paymentsystem.dto.response.PaymentResponse;
 import com.paymentsystem.dto.response.ReconciliationResult;
-import com.paymentsystem.entity.EntrySide;
-import com.paymentsystem.entity.LedgerEntry;
-import com.paymentsystem.entity.PaymentStatus;
-import com.paymentsystem.entity.PaymentTransaction;
+import com.paymentsystem.ledger.EntrySide;
+import com.paymentsystem.ledger.LedgerEntry;
+import com.paymentsystem.payment.PaymentStatus;
+import com.paymentsystem.payment.PaymentTransaction;
 import com.paymentsystem.entity.User;
-import com.paymentsystem.repository.LedgerEntryRepository;
-import com.paymentsystem.repository.PaymentTransactionRepository;
+import com.paymentsystem.ledger.LedgerEntryRepository;
+import com.paymentsystem.payment.PaymentTransactionRepository;
 import com.paymentsystem.repository.UserRepository;
 import com.paymentsystem.runner.LedgerOpeningBalanceBackfillRunner;
-import com.paymentsystem.service.LedgerReconciliationService;
-import com.paymentsystem.service.PaymentProcessingService;
-import com.paymentsystem.service.RefundProcessingService;
+import com.paymentsystem.ledger.LedgerReconciliationService;
+import com.paymentsystem.payment.PaymentProcessingService;
+import com.paymentsystem.payment.RefundProcessingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -146,7 +147,7 @@ public class PostgreSqlLedgerIntegrationTest extends AbstractPostgreSqlIntegrati
         LedgerEntry entry1 = new LedgerEntry(
                 "LED_PG_1_" + UUID.randomUUID().toString().substring(0, 8),
                 txId,
-                com.paymentsystem.entity.LedgerEntryType.PAYMENT,
+                LedgerEntryType.PAYMENT,
                 pgUserCode,
                 EntrySide.DEBIT,
                 3000L,
@@ -159,7 +160,7 @@ public class PostgreSqlLedgerIntegrationTest extends AbstractPostgreSqlIntegrati
         LedgerEntry duplicateDebit = new LedgerEntry(
                 "LED_PG_2_" + UUID.randomUUID().toString().substring(0, 8),
                 txId,
-                com.paymentsystem.entity.LedgerEntryType.PAYMENT,
+                LedgerEntryType.PAYMENT,
                 pgUserCode,
                 EntrySide.DEBIT,
                 3000L,

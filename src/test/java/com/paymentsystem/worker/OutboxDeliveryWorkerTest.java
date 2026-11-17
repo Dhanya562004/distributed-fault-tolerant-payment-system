@@ -1,14 +1,15 @@
 package com.paymentsystem.worker;
+import com.paymentsystem.outbox.OutboxDeliveryWorker;
 
 import com.paymentsystem.dto.DeliveryResult;
-import com.paymentsystem.entity.OutboxEvent;
-import com.paymentsystem.entity.OutboxStatus;
-import com.paymentsystem.repository.OutboxEventRepository;
+import com.paymentsystem.outbox.OutboxEvent;
+import com.paymentsystem.outbox.OutboxStatus;
+import com.paymentsystem.outbox.OutboxEventRepository;
 import com.paymentsystem.service.MetricsService;
-import com.paymentsystem.service.WebhookDeliveryService;
-import com.paymentsystem.service.WebhookHttpClient;
-import com.paymentsystem.service.WebhookSecurityValidator;
-import com.paymentsystem.service.WebhookSignatureService;
+import com.paymentsystem.outbox.WebhookDeliveryService;
+import com.paymentsystem.outbox.WebhookHttpClient;
+import com.paymentsystem.outbox.WebhookSecurityValidator;
+import com.paymentsystem.outbox.WebhookSignatureService;
 import com.paymentsystem.util.MutableClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

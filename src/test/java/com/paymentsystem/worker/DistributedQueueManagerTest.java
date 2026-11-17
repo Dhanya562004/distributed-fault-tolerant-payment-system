@@ -1,6 +1,7 @@
 package com.paymentsystem.worker;
+import com.paymentsystem.outbox.DistributedQueueManager;
 
-import com.paymentsystem.worker.impl.DistributedQueueManagerImpl;
+import com.paymentsystem.outbox.DistributedQueueManagerImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

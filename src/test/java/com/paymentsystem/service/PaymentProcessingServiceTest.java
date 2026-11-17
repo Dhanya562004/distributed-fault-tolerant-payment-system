@@ -1,15 +1,17 @@
 package com.paymentsystem.service;
+import com.paymentsystem.payment.PaymentProcessingService;
+import com.paymentsystem.idempotency.IdempotencyService;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentsystem.dto.request.InitiatePaymentRequest;
 import com.paymentsystem.dto.response.PaymentResponse;
-import com.paymentsystem.entity.PaymentStatus;
-import com.paymentsystem.entity.PaymentTransaction;
+import com.paymentsystem.payment.PaymentStatus;
+import com.paymentsystem.payment.PaymentTransaction;
 import com.paymentsystem.entity.User;
-import com.paymentsystem.repository.PaymentTransactionRepository;
+import com.paymentsystem.payment.PaymentTransactionRepository;
 import com.paymentsystem.repository.UserRepository;
-import com.paymentsystem.service.impl.PaymentProcessingServiceImpl;
-import com.paymentsystem.worker.DistributedQueueManager;
+import com.paymentsystem.payment.PaymentProcessingServiceImpl;
+import com.paymentsystem.outbox.DistributedQueueManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -125,9 +127,9 @@ class PaymentProcessingServiceTest {
     @Test
     @DisplayName("Should return paginated payment records")
     void testGetAllPayments_Pagination() {
-        com.paymentsystem.entity.PaymentTransaction tx1 = new com.paymentsystem.entity.PaymentTransaction("PAY_PAG_1", "IDEM_1", "USR_ALICE", 5000L, "USD", "CREDIT_CARD", "desc 1");
-        com.paymentsystem.entity.PaymentTransaction tx2 = new com.paymentsystem.entity.PaymentTransaction("PAY_PAG_2", "IDEM_2", "USR_ALICE", 7500L, "USD", "CREDIT_CARD", "desc 2");
-        com.paymentsystem.entity.PaymentTransaction tx3 = new com.paymentsystem.entity.PaymentTransaction("PAY_PAG_3", "IDEM_3", "USR_ALICE", 10000L, "USD", "CREDIT_CARD", "desc 3");
+        PaymentTransaction tx1 = new PaymentTransaction("PAY_PAG_1", "IDEM_1", "USR_ALICE", 5000L, "USD", "CREDIT_CARD", "desc 1");
+        PaymentTransaction tx2 = new PaymentTransaction("PAY_PAG_2", "IDEM_2", "USR_ALICE", 7500L, "USD", "CREDIT_CARD", "desc 2");
+        PaymentTransaction tx3 = new PaymentTransaction("PAY_PAG_3", "IDEM_3", "USR_ALICE", 10000L, "USD", "CREDIT_CARD", "desc 3");
 
         when(paymentRepository.findAll()).thenReturn(java.util.List.of(tx1, tx2, tx3));
 

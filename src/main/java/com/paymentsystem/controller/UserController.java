@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.paymentsystem.ledger.LedgerService;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -23,14 +24,14 @@ import java.util.stream.Collectors;
 public class UserController {
 
     private final UserRepository userRepository;
-    private final com.paymentsystem.service.LedgerService ledgerService;
+    private final LedgerService ledgerService;
 
     @org.springframework.beans.factory.annotation.Value("${app.ledger.enabled:true}")
     private boolean ledgerEnabled = true;
 
     @Autowired
     public UserController(UserRepository userRepository,
-                          @Autowired(required = false) com.paymentsystem.service.LedgerService ledgerService) {
+                          @Autowired(required = false) LedgerService ledgerService) {
         this.userRepository = userRepository;
         this.ledgerService = ledgerService;
     }

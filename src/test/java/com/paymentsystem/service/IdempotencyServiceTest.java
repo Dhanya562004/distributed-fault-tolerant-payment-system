@@ -1,11 +1,12 @@
 package com.paymentsystem.service;
+import com.paymentsystem.idempotency.IdempotencyService;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentsystem.dto.request.InitiatePaymentRequest;
-import com.paymentsystem.entity.IdempotencyKeyRecord;
+import com.paymentsystem.idempotency.IdempotencyKeyRecord;
 import com.paymentsystem.exception.DuplicateRequestException;
-import com.paymentsystem.repository.IdempotencyKeyRepository;
-import com.paymentsystem.service.impl.IdempotencyServiceImpl;
+import com.paymentsystem.idempotency.IdempotencyKeyRepository;
+import com.paymentsystem.idempotency.IdempotencyServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

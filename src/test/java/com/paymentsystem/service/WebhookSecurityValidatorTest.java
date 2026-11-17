@@ -1,4 +1,5 @@
 package com.paymentsystem.service;
+import com.paymentsystem.outbox.WebhookSecurityValidator;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

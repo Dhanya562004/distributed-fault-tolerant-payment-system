@@ -2,7 +2,7 @@ package com.paymentsystem.controller;
 
 import com.paymentsystem.dto.response.SystemMetricsResponse;
 import com.paymentsystem.service.MetricsService;
-import com.paymentsystem.worker.DistributedQueueManager;
+import com.paymentsystem.outbox.DistributedQueueManager;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;

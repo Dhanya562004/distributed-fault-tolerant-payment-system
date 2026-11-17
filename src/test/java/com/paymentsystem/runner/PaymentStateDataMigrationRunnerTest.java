@@ -1,10 +1,10 @@
 package com.paymentsystem.runner;
 
-import com.paymentsystem.entity.PaymentStatus;
-import com.paymentsystem.entity.PaymentTransaction;
-import com.paymentsystem.entity.RefundTransaction;
-import com.paymentsystem.repository.PaymentTransactionRepository;
-import com.paymentsystem.repository.RefundTransactionRepository;
+import com.paymentsystem.payment.PaymentStatus;
+import com.paymentsystem.payment.PaymentTransaction;
+import com.paymentsystem.payment.RefundTransaction;
+import com.paymentsystem.payment.PaymentTransactionRepository;
+import com.paymentsystem.payment.RefundTransactionRepository;
 import com.paymentsystem.test.PaymentTestHelper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
