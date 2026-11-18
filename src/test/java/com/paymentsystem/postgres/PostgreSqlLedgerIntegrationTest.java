@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -37,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * and SQL-based reconciliation on genuine PostgreSQL 16 via Testcontainers.
  */
 @SpringBootTest
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 public class PostgreSqlLedgerIntegrationTest extends AbstractPostgreSqlIntegrationTest {
 
     @Autowired
@@ -155,23 +157,29 @@ public class PostgreSqlLedgerIntegrationTest extends AbstractPostgreSqlIntegrati
                 "PG debit 1",
                 Instant.now()
         );
-        ledgerEntryRepository.saveAndFlush(entry1);
 
-        LedgerEntry duplicateDebit = new LedgerEntry(
-                "LED_PG_2_" + UUID.randomUUID().toString().substring(0, 8),
-                txId,
-                LedgerEntryType.PAYMENT,
-                pgUserCode,
-                EntrySide.DEBIT,
-                3000L,
-                "USD",
-                "PG duplicate debit",
-                Instant.now()
-        );
+        try {
+            ledgerEntryRepository.saveAndFlush(entry1);
 
-        assertThrows(DataIntegrityViolationException.class, () -> {
-            ledgerEntryRepository.saveAndFlush(duplicateDebit);
-        });
+            LedgerEntry duplicateDebit = new LedgerEntry(
+                    "LED_PG_2_" + UUID.randomUUID().toString().substring(0, 8),
+                    txId,
+                    LedgerEntryType.PAYMENT,
+                    pgUserCode,
+                    EntrySide.DEBIT,
+                    3000L,
+                    "USD",
+                    "PG duplicate debit",
+                    Instant.now()
+            );
+
+            assertThrows(DataIntegrityViolationException.class, () -> {
+                ledgerEntryRepository.saveAndFlush(duplicateDebit);
+            });
+        } finally {
+            ledgerEntryRepository.delete(entry1);
+            ledgerEntryRepository.flush();
+        }
     }
 
     @Test
