@@ -82,15 +82,6 @@ public class LedgerReconciliationServiceImpl implements LedgerReconciliationServ
 
         Timestamp cutoffTimestamp = Timestamp.from(cutoff);
 
-        // Ensure any un-backfilled opening balances exist so reconciliation doesn't fail on newly seeded users
-        if (backfillRunner != null) {
-            try {
-                backfillRunner.backfillOpeningBalances();
-            } catch (Exception e) {
-                logger.debug("Opening balance backfill check during reconciliation: {}", e.getMessage());
-            }
-        }
-
         // 1. Check Debits = Credits PER CURRENCY using SQL SUMs
         String currencyCheckSql = """
                 SELECT currency,
