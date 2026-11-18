@@ -1,16 +1,42 @@
-# Distributed Fault-Tolerant Payment System
+# ⚡ ApexPay: Distributed Fault-Tolerant Payment System
+
+> High-throughput, distributed payment processing engine engineered in Java 17 and Spring Boot 3.3. Built with single-execution cryptographic idempotency, strict 5-state lifecycle rules, double-entry financial ledgering, append-only constraints, and transactional outbox webhook dispatching.
 
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-007396.svg?style=flat-square&logo=openjdk)](https://www.oracle.com/java/)
 [![Spring Boot 3.3.4](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F.svg?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
-[![Tests](https://img.shields.io/badge/Tests-262%20Passing%20(H2)-10B981.svg?style=flat-square)](docs/testing.md)
+[![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16-4169E1.svg?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
+[![Tests](https://img.shields.io/badge/Tests-262%20Passing-10B981.svg?style=flat-square)](docs/testing.md)
+[![JaCoCo Coverage](https://img.shields.io/badge/Coverage-%3E80%25%20Core%20Packages-success.svg?style=flat-square)](pom.xml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 [![AI Usage](https://img.shields.io/badge/AI%20Usage-Disclosure-8B5CF6.svg?style=flat-square)](AI_USAGE.md)
 
-A fault-tolerant payment processing engine built with Java 17 and Spring Boot 3.3. It focuses on transaction correctness, single-execution idempotency, failure classification, transactional outbox delivery, and database concurrency controls.
+[🚀 Live Demo](#-live-demo--api-endpoints) • [✨ Key Architecture](#-core-architecture--what-it-does) • [💻 Quick Start](#-how-to-run-it) • [📊 Load Benchmark](#4-real-http-load-test-k6-over-real-http-against-postgresql) • [🧪 Test Suite](#-how-to-test-it) • [🛡️ Safe Production Changes](#-safe-production-changes--rollback-runbook) • [📖 Documentation](#-documentation)
 
 ---
 
-## What It Does
+## 🚀 Live Demo & API Endpoints
+
+Explore ApexPay — a fault-tolerant distributed payment processing system featuring asynchronous workers, idempotent transactions, ledger reconciliation, and real-time monitoring.
+
+| Service | Live Demo | Description |
+| :--- | :--- | :--- |
+| **🖥️ Streamlit Dashboard** | [Launch Dashboard ↗](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/) | Interactive dashboard to explore transactions, system metrics, and fault simulation. |
+| **⚙️ Backend API** | [Open Backend ↗](https://apexpay-backend-sc5s.onrender.com/) | Cloud-deployed Spring Boot REST API hosted on Render. Protected endpoints require API authentication. |
+| **💚 Health Monitoring** | [Check System Health ↗](https://apexpay-backend-sc5s.onrender.com/actuator/health) | Spring Boot Actuator endpoint for application and database health monitoring. |
+| **📊 API Metrics** | [View Metrics Endpoint ↗](https://apexpay-backend-sc5s.onrender.com/api/v1/metrics) | Endpoint for payment processing metrics, retries, idempotency, and system performance. Authentication may be required. |
+| **📚 Swagger API Documentation** | [Explore API Docs ↗](https://apexpay-backend-sc5s.onrender.com/swagger-ui/index.html) | Interactive OpenAPI documentation for exploring available REST API endpoints and request schemas. |
+
+### ☁️ Deployment Notes
+- **Backend**: Java 17 + Spring Boot 3.3.4, deployed on Render.
+- **Database**: Managed PostgreSQL 16 with Flyway migrations.
+- **Background Processing**: Four partitioned worker consumers.
+- **API Security**: API key authentication for protected endpoints.
+- **Hosting**: Render free-tier services may spin down after inactivity, causing slower initial responses.
+- **Note**: The live deployment and database connectivity have been verified.
+
+---
+
+## ✨ Core Architecture & What It Does
 
 - **Immutable Double-Entry Ledger & SQL Reconciliation Engine**: Implements a double-entry financial ledger where every payment and refund writes matching `DEBIT` and `CREDIT` entries in the **exact same database transaction** as the balance change. Enforced append-only with Hibernate `@Immutable`, lifecycle callbacks (`@PreUpdate`, `@PreRemove` throwing `UnsupportedOperationException`), and a database unique constraint `(transaction_id, entry_side)` preventing duplicate retry entries. Features a high-performance reconciliation engine that executes pure SQL `SUM()` aggregations across snapshots/cutoffs—verifying that total debits equal total credits **per currency** and each user's wallet balance strictly matches the sum of their ledger rows (`credits - debits`). Mismatches and audit timestamps are logged and exposed live in `/api/v1/metrics`. Verified with tests covering payments, refunds, partial refunds, mid-transaction rollback atomicity, append-only protections, and deliberate row tampering.
 - **Strict 5-State Finite State Machine & Conditional Locking**: Restructures payment state into 5 strict states (`PENDING`, `PROCESSING`, `SUCCESS`, `FAILED`, `REFUNDED`) with exactly 5 permissible transitions (`PENDING -> PROCESSING`, `PENDING -> FAILED`, `PROCESSING -> SUCCESS`, `PROCESSING -> FAILED`, `SUCCESS -> REFUNDED`). Illegal transitions throw `InvalidTransactionStateException` via `PaymentTransaction.transitionTo()`, and direct `setStatus()` has been permanently removed. A partial refund leaves the payment in `SUCCESS` (updating `refundedAmount` and `remainingRefundable`), and transitions to `REFUNDED` only when the cumulative refund reaches the full payment amount. Tested with a hardcoded 25-pair (5x5) truth table in `PaymentStatusTransitionTest`.
@@ -28,19 +54,7 @@ A fault-tolerant payment processing engine built with Java 17 and Spring Boot 3.
 
 ---
 
-## Live Demo & Endpoints
-
-| Service | URL | Notes |
-| :--- | :--- | :--- |
-| Streamlit Dashboard | [Live Dashboard](https://distributed-fault-tolerant-payment-system-5qg2tjnkfrk7tvbqxzsz.streamlit.app/) | Interactive interface for transactions, metrics, and fault simulation |
-| Backend API | [Render API](https://apexpay-backend-sc5s.onrender.com) | Spring Boot backend (Render free tier; spins down after 15 min of inactivity) |
-| Health Check | [`/actuator/health`](https://apexpay-backend-sc5s.onrender.com/actuator/health) | Reports application and database health status |
-| Metrics Endpoint | [`/api/v1/metrics`](https://apexpay-backend-sc5s.onrender.com/api/v1/metrics) | Live counters for transactions, retries, idempotency hits, and latency |
-| Swagger OpenAPI | [`/swagger-ui.html`](https://apexpay-backend-sc5s.onrender.com/swagger-ui.html) | Interactive OpenAPI 3.0 documentation |
-
----
-
-## How to Run It
+## 💻 How to Run It
 
 ### Prerequisites
 - Java 17+
@@ -107,7 +121,7 @@ Because cloud database accounts, connection strings, and API secrets contain sen
 
 ---
 
-## How to Test It
+## 🧪 How to Test It
 
 ### 1. Fast H2 Test Suite (No Docker Required)
 ```bash
@@ -207,7 +221,7 @@ Measured with JaCoCo (`mvn test jacoco:report`):
 
 ---
 
-## Safe Production Changes & Rollback Runbook
+## 🛡️ Safe Production Changes & Rollback Runbook
 
 ### 1. Zero-Downtime Database Migrations (Flyway)
 The relational database schema is version-controlled and applied at startup via **Flyway** (`src/main/resources/db/migration/`):
@@ -258,7 +272,7 @@ If a production incident, database performance bottleneck, or unforeseen ledger 
 
 ---
 
-## Known Limits
+## ⚠️ Known Limits
 
 - **Demo Persistence**: The public Render demonstration tier uses an in-memory H2 database (`MODE=PostgreSQL`) for zero-cost public showcase, so demonstration records do not persist across idle shutdowns. Production deployments natively connect to managed PostgreSQL instances (Neon, Supabase, Render Postgres) via the `prod` profile with Flyway migrations.
 - **In-Memory Partition Queues**: Worker queues are held in memory (`LinkedBlockingQueue`) inside a single JVM instance. If the application crashes, any payments waiting in the in-memory queue are lost (they remain in `PROCESSING` state in the database, with their idempotency key in `IN_PROGRESS` until the stuck-key recovery job marks them `FAILED`). Furthermore, per-user FIFO ordering is preserved only within a single application instance; multiple instances would race independently unless partitioned at an external message broker or database lock level.
@@ -269,7 +283,7 @@ If a production incident, database performance bottleneck, or unforeseen ledger 
 
 ---
 
-## Documentation
+## 📖 Documentation
 
 - [System Architecture](docs/architecture.md) — Topology, concurrency model, partitioned queues, and retry mechanisms.
 - [API Guide](docs/api-guide.md) — Endpoint specifications, request/response schemas, and example payloads.
@@ -280,6 +294,6 @@ If a production incident, database performance bottleneck, or unforeseen ledger 
 
 ---
 
-## License
+## 📄 License
 
 Distributed under the [Apache 2.0 License](LICENSE).
