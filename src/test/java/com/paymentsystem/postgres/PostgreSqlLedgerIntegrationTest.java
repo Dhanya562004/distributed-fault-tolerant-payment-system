@@ -150,22 +150,34 @@ public class PostgreSqlLedgerIntegrationTest extends AbstractPostgreSqlIntegrati
                 "LED_PG_1_" + UUID.randomUUID().toString().substring(0, 8),
                 txId,
                 LedgerEntryType.PAYMENT,
-                pgUserCode,
+                "TEST_PG_DUP_ACCT",
                 EntrySide.DEBIT,
                 3000L,
                 "USD",
                 "PG debit 1",
                 Instant.now()
         );
+        LedgerEntry credit1 = new LedgerEntry(
+                "LED_PG_1_CR_" + UUID.randomUUID().toString().substring(0, 8),
+                txId,
+                LedgerEntryType.PAYMENT,
+                "SYSTEM_SETTLEMENT",
+                EntrySide.CREDIT,
+                3000L,
+                "USD",
+                "PG credit 1",
+                Instant.now()
+        );
 
         try {
             ledgerEntryRepository.saveAndFlush(entry1);
+            ledgerEntryRepository.saveAndFlush(credit1);
 
             LedgerEntry duplicateDebit = new LedgerEntry(
                     "LED_PG_2_" + UUID.randomUUID().toString().substring(0, 8),
                     txId,
                     LedgerEntryType.PAYMENT,
-                    pgUserCode,
+                    "TEST_PG_DUP_ACCT",
                     EntrySide.DEBIT,
                     3000L,
                     "USD",
@@ -177,8 +189,7 @@ public class PostgreSqlLedgerIntegrationTest extends AbstractPostgreSqlIntegrati
                 ledgerEntryRepository.saveAndFlush(duplicateDebit);
             });
         } finally {
-            ledgerEntryRepository.delete(entry1);
-            ledgerEntryRepository.flush();
+            jdbcTemplate.update("DELETE FROM ledger_entries WHERE transaction_id = ?", txId);
         }
     }
 
