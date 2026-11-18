@@ -30,6 +30,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -48,6 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 public class AtomicPaymentCommitIntegrationTest {
 
     private static final String API_KEY = "apexpay_admin_secret_key_2026";
@@ -105,9 +107,9 @@ public class AtomicPaymentCommitIntegrationTest {
         paymentRepository.saveAndFlush(tx);
         paymentCoordinator.commitPaymentProcessing(paymentId);
 
-        // 3. Spy on outboxEventRepository to throw exception when saving outbox event
+        // 3. Spy on outboxEventRepository to throw exception when saving outbox event for this payment
         doThrow(new DataIntegrityViolationException("Simulated forced DB outbox write failure"))
-                .when(outboxEventRepository).save(any(OutboxEvent.class));
+                .when(outboxEventRepository).save(argThat(event -> event != null && paymentId.equals(event.getAggregateId())));
 
         InitiatePaymentRequest req = new InitiatePaymentRequest(
                 idempotencyKey, userCode, 25000L, "USD", "CREDIT_CARD", "Atomic rollback test"
@@ -130,9 +132,6 @@ public class AtomicPaymentCommitIntegrationTest {
         // 7. Verify no outbox event exists for this payment
         List<OutboxEvent> events = outboxEventRepository.findByAggregateId(paymentId);
         assertTrue(events.isEmpty(), "Outbox table must contain 0 events for rolled-back transaction");
-
-        // Reset spy
-        reset(outboxEventRepository);
     }
 
     @Test

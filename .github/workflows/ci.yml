@@ -55,7 +55,17 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
+    - name: Ensure Docker Daemon is Active
+      run: |
+        sudo systemctl start docker || sudo service docker start || true
+        sudo chmod 666 /var/run/docker.sock || true
+        docker version
+        docker info
+
     - name: Run PostgreSQL 16 Testcontainers Integration Tests & Concurrency Benchmark
+      env:
+        DOCKER_HOST: unix:///var/run/docker.sock
+        TESTCONTAINERS_RYUK_DISABLED: "false"
       run: mvn test -Ppostgres-it -B -DtrimStackTrace=false
 
     - name: Print PostgreSQL Test Reports & Benchmark Output
